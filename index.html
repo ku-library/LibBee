@@ -469,7 +469,15 @@ function buildSearchCard(bool,explanation,corrected,raw,yf,yt,pr,oa,ol){
 // =================================================================
 async function buildBoolean(query,history){
   const ctx=history.slice(-6).map(m=>`${m.role}: ${m.content}`).join('\n');
-  const p=`You are helping build search queries for Khalifa University (KU) Library PRIMO in Abu Dhabi, UAE. KU = Khalifa University, NOT Kuwait University.\n\nFix spelling and build a Boolean query.\nContext:\n${ctx}\nRequest: "${query}"\n\nReturn ONLY raw JSON:\n{"corrected":"fixed","boolean":"(A OR B) AND (C OR D)","natural":"description","year_from":"","year_to":"","peer_reviewed":false,"open_access":false,"explanation":"one sentence"}`;
+  const currentYear = new Date().getFullYear();
+  const p=`You are helping build search queries for Khalifa University (KU) Library PRIMO in Abu Dhabi, UAE. KU = Khalifa University, NOT Kuwait University.
+The current year is ${currentYear}. When the user says "last 5 years", calculate: year_from = ${currentYear - 5}, year_to = ${currentYear}. "Last 3 years" = ${currentYear - 3} to ${currentYear}. "Last 10 years" = ${currentYear - 10} to ${currentYear}. "Recent" = ${currentYear - 3} to ${currentYear}. Always use actual 4-digit years, never relative words.
+
+Fix spelling and build a Boolean query.
+Context:\n${ctx}\nRequest: "${query}"
+
+Return ONLY raw JSON:
+{"corrected":"fixed","boolean":"(A OR B) AND (C OR D)","natural":"description","year_from":"","year_to":"","peer_reviewed":false,"open_access":false,"explanation":"one sentence"}`;
   const txt=await callLLM({messages:[{role:'user',content:p}],max_tokens:500});
   const s=txt.indexOf('{'),e=txt.lastIndexOf('}');
   if(s===-1) throw new Error('no_json');
