@@ -495,23 +495,7 @@ async function fullSearch(msg, chatHist, cm) {
     window._primoResults = data.results||[];
     const area = loadEl.querySelector('#primo-results-area');
     if(data.results && data.results.length > 0) {
-      area.innerHTML = `<div style="font-size:.82rem;font-weight:700;color:var(--ku-blue);margin:10px 0 6px">📄 Top ${data.results.length} of ${data.total.toLocaleString()} results:</div>` + data.results.map((r,i)=>renderResultCard(r,i)).join('');
-      // AI Summary
-      area.innerHTML += `<div style="margin-top:10px;font-size:.8rem;color:var(--mu)"><div class="typing"><span></span><span></span><span></span></div> Generating AI summary…</div>`;
-      cm.scrollTop=cm.scrollHeight;
-      try {
-        const titles = data.results.map((r,i)=>`${i+1}. "${r.title}" by ${r.creator} (${r.date}) - ${r.source}`).join('\n');
-        const summary = await callLLM({
-          system: 'You are a Khalifa University Library research assistant. Summarize the search results in 3-4 sentences. Mention key themes, notable papers, and suggest which ones might be most relevant. Be concise.',
-          messages:[{role:'user',content:`Summarize these ${data.results.length} search results for the query "${msg}":\n\n${titles}`}],
-          max_tokens: 300
-        });
-        const lastDiv = area.querySelector('div:last-child');
-        if(lastDiv) lastDiv.innerHTML = `<div style="background:#f0f4f8;border-radius:10px;padding:10px 12px;margin-top:8px;font-size:.82rem;line-height:1.6;border-left:3px solid var(--ku-gold)"><strong>🤖 AI Summary:</strong><br>${fmt(summary)}</div>`;
-      } catch(e) {
-        const lastDiv = area.querySelector('div:last-child');
-        if(lastDiv) lastDiv.remove();
-      }
+      area.innerHTML = `<div style="font-size:.82rem;font-weight:700;color:var(--ku-blue);margin:10px 0 6px">📄 Top ${data.results.length} of ${data.total.toLocaleString()} results:</div>` + data.results.map((r,i)=>renderResultCard(r,i)).join('') + `<div style="text-align:center;margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Want more results? <a href="${mkURL(bool,'Everything','MyInst_and_CI',[])}" target="_blank" style="color:var(--ku-blue);font-weight:700">Search all ${data.total.toLocaleString()} results in PRIMO →</a></div>`;
     } else {
       area.innerHTML = `<div style="font-size:.82rem;color:var(--mu);margin-top:8px">No results found via PRIMO API. Try the links above to search directly.</div>`;
     }
