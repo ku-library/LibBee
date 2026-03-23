@@ -575,7 +575,7 @@ async function fullSearch(msg, chatHist, cm) {
   // Store params globally — avoids quote-escaping issues in onclick
   const sid = 'S' + Date.now();
   window._sp = window._sp || {};
-  window._sp[sid] = {q:cleanQ, bool, pr:!!pr, oa:!!oa, yf:yf||'', yt:yt||''};
+  window._sp[sid] = {q:cleanQ, orig:msg, bool, pr:!!pr, oa:!!oa, yf:yf||'', yt:yt||''};
 
   const qLower = msg.toLowerCase();
   const wantBooks = /\b(books?|ebooks?|textbooks?)\b/i.test(qLower);
@@ -587,7 +587,7 @@ async function fullSearch(msg, chatHist, cm) {
     await doSearchSource(sid, 'primo', loadEl);
     const area = loadEl.querySelector('#primo-results-area');
     const pubmedLink = isMedical ? `<a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(cleanQ)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🏥 Search PubMed</a>` : '';
-    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Explore more sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(cleanQ)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔬 Search Consensus</a>${pubmedLink}</div></div>`;
+    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Explore more sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔬 Search Consensus</a>${pubmedLink}</div></div>`;
   } else {
     // ARTICLES/RESOURCES → search PRIMO directly, show Consensus + PubMed as links
     loadEl.innerHTML=`<div class="av">🔍</div><div class="scard"><div class="scard-title">🔍 ${natural||explanation} ${badge()}</div><div class="bool-str">${bool}</div>${buildSearchCard(bool,explanation,corrected,msg,yf,yt,pr,oa,false)}<div style="margin-top:10px;font-size:.8rem;color:var(--mu)"><div class="typing"><span></span><span></span><span></span></div> Searching PRIMO…</div><div id="primo-results-area"></div></div>`;
@@ -595,7 +595,7 @@ async function fullSearch(msg, chatHist, cm) {
     await doSearchSource(sid, 'primo', loadEl);
     const area = loadEl.querySelector('#primo-results-area');
     const pubmedLink = isMedical ? `<a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(cleanQ)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🏥 Search PubMed</a>` : '';
-    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Search other sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(cleanQ)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔬 Search Consensus</a>${pubmedLink}</div></div>`;
+    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Search other sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔬 Search Consensus</a>${pubmedLink}</div></div>`;
   }
   chatHist.push({role:'assistant',content:`Search: ${natural||explanation}. Boolean: ${bool}`});
   cm.scrollTop=cm.scrollHeight;
@@ -611,7 +611,7 @@ function doSearchNew(sid, source) {
 
   if (source === 'consensus') {
     const el = document.createElement('div');el.className='msg bot';el.style.maxWidth='96%';
-    el.innerHTML=`<div class="av">🔍</div><div class="scard"><div style="padding:12px;text-align:center"><div style="font-size:.86rem;font-weight:700;color:#9d174d;margin-bottom:6px">🔬 Consensus</div><a href="https://consensus.app/results/?q=${encodeURIComponent(sp.q)}" target="_blank" style="display:inline-block;padding:8px 20px;background:#9d174d;color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:.84rem">Search on Consensus →</a><div style="font-size:.76rem;color:var(--mu);margin-top:6px">AI-powered research paper search</div></div></div>`;
+    el.innerHTML=`<div class="av">🔍</div><div class="scard"><div style="padding:12px;text-align:center"><div style="font-size:.86rem;font-weight:700;color:#9d174d;margin-bottom:6px">🔬 Consensus</div><a href="https://consensus.app/results/?q=${encodeURIComponent(sp.orig||sp.q)}" target="_blank" style="display:inline-block;padding:8px 20px;background:#9d174d;color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:.84rem">Search on Consensus →</a><div style="font-size:.76rem;color:var(--mu);margin-top:6px">AI-powered research paper search</div></div></div>`;
     cm.appendChild(el);cm.scrollTop=9999;
     return;
   }
@@ -653,11 +653,11 @@ async function doSearchSource(sid, source, loadEl) {
         html += `<div style="text-align:center;margin-top:6px;padding:10px;background:#d1fae5;border-radius:10px;font-size:.82rem"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(sp.q)}" target="_blank" style="color:#065f46;font-weight:700">🏥 Search all results in PubMed →</a></div>`;
       }
       if (cnt < 3) {
-        html += `<div style="margin-top:10px;padding:10px;background:#fef3c7;border-radius:10px;font-size:.82rem;border-left:3px solid #C8A951">Only ${cnt} result${cnt>1?'s':''}. Try other sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🔬 Consensus</a><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🏥 PubMed</a></div></div>`;
+        html += `<div style="margin-top:10px;padding:10px;background:#fef3c7;border-radius:10px;font-size:.82rem;border-left:3px solid #C8A951">Only ${cnt} result${cnt>1?'s':''}. Try other sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(sp.orig||sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🔬 Consensus</a><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🏥 PubMed</a></div></div>`;
       }
       area.innerHTML = html;
     } else {
-      area.innerHTML = `<div style="font-size:.82rem;color:var(--mu);margin-top:8px">No results from ${srcLabel}. ${data.error||''}</div><div style="margin-top:8px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Try other sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🔬 Consensus</a><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🏥 PubMed</a></div></div>`;
+      area.innerHTML = `<div style="font-size:.82rem;color:var(--mu);margin-top:8px">No results from ${srcLabel}. ${data.error||''}</div><div style="margin-top:8px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Try other sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(sp.orig||sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🔬 Consensus</a><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🏥 PubMed</a></div></div>`;
     }
   } catch(e) {
     area.innerHTML = `<div style="font-size:.78rem;color:var(--mu);margin-top:8px">Error: ${e.message}</div>`;
