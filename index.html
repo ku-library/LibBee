@@ -235,6 +235,7 @@ const VID = '971KUOSTAR_INST:KU';
 const PRIMO_BASE = 'https://khalifa.primo.exlibrisgroup.com/discovery/search';
 const AI_URL = 'https://khalifa.primo.exlibrisgroup.com/discovery/researchAssistant?vid=971KUOSTAR_INST:KU&query=';
 const ERESOURCES = 'https://library.ku.ac.ae/eresources';
+const RAG_URL = 'https://nikeshn-kulibrary.hf.space';
 
 // =================================================================
 // FAQ KNOWLEDGE BASE — instant answers, zero API cost
@@ -352,6 +353,31 @@ async function _callModel(model, {system,messages,max_tokens}) {
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e?.error?.message||'ChatGPT error '+r.status);}
     const d=await r.json(); return d.choices?.[0]?.message?.content||'';
   }
+}
+
+// =================================================================
+// RAG KNOWLEDGE QUERY (via HuggingFace Space)
+// =================================================================
+async function callRAG(question) {
+  const model = activeModel === 'claude' ? 'claude' : 'gpt';
+  const r = await fetch(RAG_URL + '/rag', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, model })
+  });
+  if (!r.ok) throw new Error('RAG service unavailable');
+  const data = await r.json();
+  if (data.error && !data.answer) throw new Error(data.error);
+  let html = fmt(data.answer);
+  if (data.sources && data.sources.length > 0) {
+    html += '<div style="margin-top:8px;font-size:.75rem;color:var(--mu)"><strong>Sources:</strong> ';
+    html += data.sources.map(s => s.source ? `<a href="${s.source}" target="_blank" style="color:var(--t)">${s.title || s.source}</a>` : s.title).join(' · ');
+    html += '</div>';
+  }
+  if (data.model_used && data.model_used !== model) {
+    html += ` <span style="font-size:.66rem;color:var(--mu)">(used ${data.model_used})</span>`;
+  }
+  return html;
 }
 
 // =================================================================
@@ -618,9 +644,17 @@ async function sendChat(){
     if(intent==='search'){
       await fullSearch(msg, chatHist, cm);
     } else if(intent==='library'){
-      const reply=await callLLM({system:LIB_SYS,messages:chatHist,max_tokens:300});
-      chatHist.push({role:'assistant',content:reply});
-      addBotStreamed(fmt(reply)+' '+badge()); showFollowUps('library');
+      // Try RAG first (grounded in real KU docs), fallback to LLM
+      try {
+        const ragAnswer = await callRAG(msg);
+        chatHist.push({role:'assistant',content:ragAnswer});
+        addBotStreamed(ragAnswer+' '+badge()+' <span class="model-badge" style="background:#E1F5EE;color:#0F6E56">RAG</span>'); showFollowUps('library');
+      } catch(ragErr) {
+        console.warn('RAG failed, using LLM:', ragErr.message);
+        const reply=await callLLM({system:LIB_SYS,messages:chatHist,max_tokens:300});
+        chatHist.push({role:'assistant',content:reply});
+        addBotStreamed(fmt(reply)+' '+badge()); showFollowUps('library');
+      }
     } else if(intent==='clarify'){
       const topic=msg.replace(/\b(what is|tell me about|explain|about)\b/gi,'').trim()||msg;
       addMsg('bot',`I can help with <strong>${topic}</strong>! ${badge()}<div style="display:flex;flex-direction:column;gap:7px;margin-top:10px"><button onclick="chip('Find articles on ${topic}')" style="padding:8px 12px;background:var(--ku-blue);color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:600;font-size:.8rem">🔍 Find in Library</button><button onclick="chip('Explain ${topic} in detail')" style="padding:8px 12px;background:#f0f4f8;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:10px;cursor:pointer;font-weight:600;font-size:.8rem">💡 General explanation</button></div>`);
