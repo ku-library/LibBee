@@ -686,10 +686,34 @@ async function routeQuery(msg,history){
 }
 
 // =================================================================
-// AGENTS
+// AGENTS — dynamic config from admin
 // =================================================================
-const LIB_SYS=`You are the Khalifa University (KU) Library Assistant in Abu Dhabi, UAE. KU = Khalifa University, NOT Kuwait University. Answer in 2-3 sentences with links. Never mention proxy/on-campus/off-campus.\nHours: https://library.ku.ac.ae/hours | Rooms: https://library.ku.ac.ae/rooms/ | ILL: https://library.ku.ac.ae/ill/ | Account: https://khalifa.primo.exlibrisgroup.com/discovery/account?vid=971KUOSTAR_INST:KU | OA: https://library.ku.ac.ae/oa/ | Ask: https://library.ku.ac.ae/AskUs | E-resources: https://library.ku.ac.ae/eresources`;
-const GEN_SYS=`You are the Khalifa University Library Assistant, Abu Dhabi, UAE. KU = Khalifa University. Answer factually in 3-5 sentences. End with: "Would you like me to find books or articles on this from Khalifa University Library?"`;
+let botConfig = {};
+let LIB_SYS=`You are the Khalifa University (KU) Library Assistant in Abu Dhabi, UAE. KU = Khalifa University, NOT Kuwait University. Answer in 2-3 sentences with links. Never mention proxy/on-campus/off-campus.\nHours: https://library.ku.ac.ae/hours | Rooms: https://library.ku.ac.ae/rooms/ | ILL: https://library.ku.ac.ae/ill/ | Account: https://khalifa.primo.exlibrisgroup.com/discovery/account?vid=971KUOSTAR_INST:KU | OA: https://library.ku.ac.ae/oa/ | Ask: https://library.ku.ac.ae/AskUs | E-resources: https://library.ku.ac.ae/eresources`;
+let GEN_SYS=`You are the Khalifa University Library Assistant, Abu Dhabi, UAE. KU = Khalifa University. Answer factually in 3-5 sentences. End with: "Would you like me to find books or articles on this from Khalifa University Library?"`;
+
+async function loadBotConfig() {
+  try {
+    const r = await fetch(RAG_URL + '/config');
+    if (r.ok) {
+      botConfig = await r.json();
+      // Apply dynamic system prompts
+      if (botConfig.bot_personality) {
+        const extra = botConfig.custom_instructions ? '\n\nAdditional instructions: ' + botConfig.custom_instructions : '';
+        LIB_SYS = botConfig.bot_personality + extra + '\nHours: https://library.ku.ac.ae/hours | Rooms: https://library.ku.ac.ae/rooms/ | ILL: https://library.ku.ac.ae/ill/ | Account: https://khalifa.primo.exlibrisgroup.com/discovery/account?vid=971KUOSTAR_INST:KU | OA: https://library.ku.ac.ae/oa/ | Ask: https://library.ku.ac.ae/AskUs | E-resources: https://library.ku.ac.ae/eresources';
+        GEN_SYS = botConfig.bot_personality + extra + '\nAnswer factually in 3-5 sentences. End with: "Would you like me to find books or articles on this from Khalifa University Library?"';
+      }
+      // Apply default model
+      if (botConfig.default_model) switchModel(botConfig.default_model);
+    }
+  } catch(e) { console.warn('Config fetch failed, using defaults:', e.message); }
+}
+
+function getWelcomeHTML() {
+  const welcome = botConfig.welcome_message || "Hello! I'm the <strong>Khalifa University Library AI Assistant</strong> 👋<br><br>I can help with finding books, articles, library services, and research. Just ask!";
+  const announce = botConfig.announcement ? `<div style="margin-bottom:10px;padding:8px 12px;background:#fef3c7;border-left:3px solid #C8A951;border-radius:6px;font-size:.8rem;color:#92400e">📢 ${botConfig.announcement}</div>` : '';
+  return `<div class="msg bot"><div class="av">🤖</div><div class="bub">${announce}${welcome}<br><br><span style="font-size:.75rem;color:var(--mu)">Switch between <strong style="color:#10A37F">ChatGPT</strong> and <strong style="color:#D97706">Claude</strong> above.</span></div></div>`;
+}
 
 // =================================================================
 // STREAMING TEXT REVEAL
@@ -713,11 +737,20 @@ function streamText(el, html, speed=12) {
 let chatHist=[];
 function clearChat(){
   chatHist=[];
-  document.getElementById('chatMsgs').innerHTML=`<div class="msg bot"><div class="av">🤖</div><div class="bub">Hello! I'm the <strong>Khalifa University Library AI Assistant</strong> 👋<br><br>I can help with finding books, articles, library services, and research. Just ask!<br><br><span style="font-size:.75rem;color:var(--mu)">Switch between <strong style="color:#10A37F">ChatGPT</strong> and <strong style="color:#D97706">Claude</strong> above.</span></div></div>`;
+  document.getElementById('chatMsgs').innerHTML = getWelcomeHTML();
   document.getElementById('chips').style.display='flex';
 }
+// Load config and show welcome on page load
+loadBotConfig().then(() => {
+  document.getElementById('chatMsgs').innerHTML = getWelcomeHTML();
+});
 async function sendChat(){
   const inp=document.getElementById('chatIn');const msg=inp.value.trim();if(!msg)return;
+  // Check maintenance mode
+  if (botConfig.maintenance_mode === 'true') {
+    addMsg('bot', `⚠️ ${botConfig.maintenance_message || 'The chatbot is currently under maintenance. Please try again later.'}`);
+    inp.value=''; return;
+  }
   inp.value='';addMsg('user',msg);document.getElementById('chips').style.display='none';
   const cm=document.getElementById('chatMsgs');
   chatHist.push({role:'user',content:String(msg)});
