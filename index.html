@@ -587,15 +587,15 @@ async function fullSearch(msg, chatHist, cm) {
     await doSearchSource(sid, 'primo', loadEl);
     const area = loadEl.querySelector('#primo-results-area');
     const pubmedBtn = isMedical ? `<button class="fq" onclick="doSearchNew('${sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer">🏥 Search PubMed</button>` : '';
-    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Search other scholarly sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button class="fq" onclick="doSearchNew('${sid}','consensus')" style="padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #f9a8d4;cursor:pointer">🔬 Search Consensus</button>${pubmedBtn}<button class="fq" onclick="doSearchNew('${sid}','scholar')" style="padding:6px 14px;background:#e0e7ff;color:#3730a3;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #a5b4fc;cursor:pointer">🎓 Semantic Scholar</button></div></div>`;
+    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Search other scholarly sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔬 Go to Consensus and search</a>${pubmedBtn}<button class="fq" onclick="doSearchNew('${sid}','scholar')" style="padding:6px 14px;background:#e0e7ff;color:#3730a3;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #a5b4fc;cursor:pointer">🎓 Search Semantic Scholar</button></div></div>`;
   } else {
-    // ARTICLES/RESOURCES → search PRIMO directly, show MCP search buttons
+    // ARTICLES/RESOURCES → search PRIMO directly
     loadEl.innerHTML=`<div class="av">🔍</div><div class="scard"><div class="scard-title">🔍 ${natural||explanation} ${badge()}</div><div class="bool-str">${bool}</div>${buildSearchCard(bool,explanation,corrected,msg,yf,yt,pr,oa,false)}<div style="margin-top:10px;font-size:.8rem;color:var(--mu)"><div class="typing"><span></span><span></span><span></span></div> Searching PRIMO…</div><div id="primo-results-area"></div></div>`;
     cm.scrollTop=cm.scrollHeight;
     await doSearchSource(sid, 'primo', loadEl);
     const area = loadEl.querySelector('#primo-results-area');
     const pubmedBtn = isMedical ? `<button class="fq" onclick="doSearchNew('${sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer">🏥 Search PubMed</button>` : '';
-    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Search other scholarly sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><button class="fq" onclick="doSearchNew('${sid}','consensus')" style="padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #f9a8d4;cursor:pointer">🔬 Search Consensus</button>${pubmedBtn}<button class="fq" onclick="doSearchNew('${sid}','scholar')" style="padding:6px 14px;background:#e0e7ff;color:#3730a3;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #a5b4fc;cursor:pointer">🎓 Semantic Scholar</button></div></div>`;
+    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Search other scholarly sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔬 Go to Consensus and search</a>${pubmedBtn}<button class="fq" onclick="doSearchNew('${sid}','scholar')" style="padding:6px 14px;background:#e0e7ff;color:#3730a3;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #a5b4fc;cursor:pointer">🎓 Search Semantic Scholar</button></div></div>`;
   }
   chatHist.push({role:'assistant',content:`Search: ${natural||explanation}. Boolean: ${bool}`});
   logToAdmin(msg,'search');
@@ -610,15 +610,8 @@ function doSearchNew(sid, source) {
   if (!sp) return;
   const cm = document.getElementById('chatMsgs');
 
-  if (source === 'consensus') {
-    const el = document.createElement('div');el.className='msg bot';el.style.maxWidth='96%';
-    el.innerHTML=`<div class="av">🔍</div><div class="scard"><div style="padding:12px;text-align:center"><div style="font-size:.86rem;font-weight:700;color:#9d174d;margin-bottom:6px">🔬 Consensus</div><a href="https://consensus.app/results/?q=${encodeURIComponent(sp.orig||sp.q)}" target="_blank" style="display:inline-block;padding:8px 20px;background:#9d174d;color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:.84rem">Search on Consensus →</a><div style="font-size:.76rem;color:var(--mu);margin-top:6px">AI-powered research paper search</div></div></div>`;
-    cm.appendChild(el);cm.scrollTop=9999;
-    return;
-  }
-
   const loadEl = document.createElement('div');loadEl.className='msg bot';loadEl.style.maxWidth='96%';
-  const lbl = {primo:'📚 PRIMO',pubmed:'🏥 PubMed',scholar:'🎓 Google Scholar',all:'🔍 All Sources'}[source]||source;
+  const lbl = {primo:'📚 PRIMO',pubmed:'🏥 PubMed',scholar:'🎓 Semantic Scholar'}[source]||source;
   loadEl.innerHTML=`<div class="av">🔍</div><div class="scard"><div class="typing" style="padding:8px 0"><span></span><span></span><span></span></div><div style="font-size:.8rem;color:var(--mu)">Searching ${lbl}…</div><div id="primo-results-area"></div></div>`;
   cm.appendChild(loadEl);cm.scrollTop=cm.scrollHeight;
   doSearchSource(sid, source, loadEl);
@@ -651,16 +644,21 @@ async function doSearchSource(sid, source, loadEl) {
     if (cnt > 0) {
       let html = `<div style="font-size:.82rem;font-weight:700;color:var(--ku-blue);margin:10px 0 6px">📄 ${srcLabel}: Top ${cnt} of ${tot.toLocaleString()} results</div>`;
       html += data.results.map((r,i) => renderResultCard(r, i)).join('');
+
+      // "View all" links based on source
       if (source === 'primo' && sp.bool) {
         html += `<div style="text-align:center;margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem"><a href="${mkURL(sp.bool,'Everything','MyInst_and_CI',[])}" target="_blank" style="color:var(--ku-blue);font-weight:700">View all ${tot.toLocaleString()} results in PRIMO →</a></div>`;
-        html += `<div style="text-align:center;margin-top:6px;padding:10px;background:#d1fae5;border-radius:10px;font-size:.82rem"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(sp.q)}" target="_blank" style="color:#065f46;font-weight:700">🏥 Search all results in PubMed →</a></div>`;
       }
-      if (cnt < 3) {
-        html += `<div style="margin-top:10px;padding:10px;background:#fef3c7;border-radius:10px;font-size:.82rem;border-left:3px solid #C8A951">Only ${cnt} result${cnt>1?'s':''}. Try other sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(sp.orig||sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🔬 Consensus</a><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🏥 PubMed</a></div></div>`;
+      if (source === 'pubmed') {
+        html += `<div style="text-align:center;margin-top:8px;padding:10px;background:#d1fae5;border-radius:10px;font-size:.82rem"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(sp.q)}" target="_blank" style="color:#065f46;font-weight:700">View all ${tot.toLocaleString()} results in PubMed →</a></div>`;
       }
+      if (source === 'scholar') {
+        html += `<div style="text-align:center;margin-top:8px;padding:10px;background:#e0e7ff;border-radius:10px;font-size:.82rem"><a href="https://www.semanticscholar.org/search?q=${encodeURIComponent(sp.orig||sp.q)}" target="_blank" style="color:#3730a3;font-weight:700">View all results in Semantic Scholar →</a></div>`;
+      }
+
       area.innerHTML = html;
     } else {
-      area.innerHTML = `<div style="font-size:.82rem;color:var(--mu);margin-top:8px">No results from ${srcLabel}. ${data.error||''}</div><div style="margin-top:8px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Try other sources: <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"><a href="https://consensus.app/results/?q=${encodeURIComponent(sp.orig||sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🔬 Consensus</a><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(sp.q)}" target="_blank" style="display:inline-block;padding:4px 12px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:600;font-size:.78rem">🏥 PubMed</a></div></div>`;
+      area.innerHTML = `<div style="font-size:.82rem;color:var(--mu);margin-top:8px">No results from ${srcLabel}. ${data.error||''}</div>`;
     }
   } catch(e) {
     area.innerHTML = `<div style="font-size:.78rem;color:var(--mu);margin-top:8px">Error: ${e.message}</div>`;
