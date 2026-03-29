@@ -39,6 +39,11 @@ header{background:var(--ku-blue);color:#fff;padding:10px 16px;display:flex;align
 .followups{display:flex;flex-wrap:wrap;gap:5px;padding:2px 12px 8px 50px}
 .fq{padding:4px 10px;border-radius:20px;font-size:.72rem;border:1.5px solid var(--ku-blue);color:var(--ku-blue);cursor:pointer;background:#fff;transition:all .2s}
 .fq:hover{background:var(--ku-blue);color:#fff}
+/* Search recovery banner — shown after general answers */
+.search-recovery{margin:4px 12px 8px 50px;padding:10px 14px;background:linear-gradient(135deg,#eff6ff,#f5f3ff);border-radius:12px;border:1.5px solid #c4b5fd;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.search-recovery-text{font-size:.78rem;color:#4c1d95;font-weight:600}
+.search-recovery-btn{padding:6px 14px;background:var(--ku-blue);color:#fff;border:none;border-radius:9px;font-size:.76rem;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;flex-shrink:0}
+.search-recovery-btn:hover{background:#004488;transform:translateY(-1px)}
 .cin{padding:10px 12px;background:#fff;border-top:1px solid var(--br);display:flex;gap:7px;align-items:center}
 .cin input{flex:1;padding:9px 13px;border:2px solid var(--br);border-radius:24px;font-size:.86rem;outline:none;min-width:0}
 .cin input:focus{border-color:var(--ku-blue)}
@@ -743,11 +748,12 @@ async function fullSearch(msg, chatHist, cm) {
   cm.appendChild(loadEl); cm.scrollTop = cm.scrollHeight;
 
   let progressData = {};
+  const wantBooksEarly = /\b(books?|ebooks?|textbooks?)\b/i.test(msg); // detect early for progress label
   const res = await executeSearch(msg, {
     history: chatHist,
     onProgress: (d) => {
       progressData = d;
-      const label = res?.wantBooks ? `📗 Book Search: ${d.natural||d.explanation}` : `🔍 ${d.natural||d.explanation}`;
+      const label = wantBooksEarly ? `📗 Book Search: ${d.natural||d.explanation}` : `🔍 ${d.natural||d.explanation}`;
       loadEl.innerHTML = `<div class="av">🔍</div><div class="scard"><div class="scard-title">${label} ${badge()}</div><div class="bool-str">${d.bool}</div>${buildSearchCard(d.bool,d.explanation,d.corrected,msg,d.yf,d.yt,d.pr,d.oa,false)}<div style="margin-top:10px;font-size:.8rem;color:var(--mu)"><div class="typing"><span></span><span></span><span></span></div> Searching PRIMO…</div><div id="primo-results-area"></div></div>`;
       cm.scrollTop = cm.scrollHeight;
     }
@@ -848,29 +854,49 @@ async function doSearchSource(sid, source, loadEl) {
 const DB_LIST=['sciencedirect','ieee','scopus','web of science','springer','nature journal','wiley','taylor francis','pubmed','embase','cinahl','clinicalkey','cochrane','uptodate','acm digital','scifinder','scival','jstor','proquest','emerald','knovel','ebsco','elsevier','arxiv','zendy','mdpi','asme','asce','astm','aiaa','aip','aps journal','medline','database','e-resource','eresource'];
 function isDBQuery(msg){const l=msg.toLowerCase();return DB_LIST.some(d=>l.includes(d));}
 
-// Fix 7: Expanded SEARCH_RE — catches more natural research phrasings
-const SEARCH_RE=/\b(find|search for|look for|show me|get me|i need|i want|give me|locate|recommend|suggest)\b.{0,30}(article|book|paper|journal|research|literature|publication|study|studies|resources|databases?|sources?)/i;
+// Fix: SEARCH_RE — verb + content type (existing pattern)
+const SEARCH_RE=/\b(find|search for|look for|show me|get me|i need|i want|give me|locate|recommend|suggest|looking for)\b.{0,40}(article|book|paper|journal|research|literature|publication|study|studies|resources|databases?|sources?)/i;
 
-// Fix 7: Expanded LIBRARY_RE — catches database/service questions that were slipping to clarify
-const LIBRARY_RE=/room|booking|reserve|hours|open|closed|ill|interlibrary|loan|account|fine|fee|renew|return|borrow|orcid|khazna|open access|publish|apc|newsletter|tour|visit|alumni|ask a librarian|contact|library information|library service|how do i access|how to access|can i access|remote access|off.?campus|vpn|proxy|thesis|dissertation|submit|repository|refworks|zotero|mendeley|endnote|citation manager|research consultation|instruction session|information literacy/i;
+// Fix: catches "articles on X", "papers on X", "books on X" without a verb
+const CONTENT_FIRST_RE=/^(articles?|papers?|books?|journals?|studies|publications?|research)\s+(on|about|regarding|related to|concerning)\s+\S/i;
 
-// Fix 7: catch "tell me about X database/resource" patterns as library not clarify
-const DB_INFO_RE=/\b(what is|tell me about|explain|about|info on|information on|how (?:do i use|does|to use))\b.{0,40}(database|resource|library|primo|scopus|web of science|ieee|pubmed|sciencedirect|elsevier|springer|wiley|jstor)/i;
+// Fix: catches "I want articles on X", "I need papers about X" — verb then content type
+const WANT_CONTENT_RE=/\b(i want|i need|i'd like|i am looking for|looking for|find me|get me)\s+(some\s+)?(articles?|papers?|books?|journals?|research|studies|publications?)\b/i;
+
+// Fix: catches "what is the impact/effect/role of X" style research questions
+// These are research topics, not general knowledge questions — route to search
+const RESEARCH_QUESTION_RE=/\b(what is the (impact|effect|role|influence|relationship|correlation|use|application|importance|benefit|challenge|advantage|disadvantage|significance) of|how does .{1,30} (affect|impact|influence|relate to)|why (is|are|does|do) .{1,30} (important|used|considered)|what are the (causes?|effects?|impacts?|benefits?|challenges?|advantages?|disadvantages?|applications?) of)\b/i;
+
+// Fix: catches "research on X", "literature on X", "studies on X" standalone
+const RESEARCH_TOPIC_RE=/\b(research|literature|studies|papers?|articles?|publications?)\s+(on|about|regarding|related to)\s+\S/i;
+
+// Fix: LIBRARY_RE — removed 'return' which was matching "I want articles" queries
+const LIBRARY_RE=/\b(room booking|reserve a room|study room|library hours|opening hours|interlibrary loan|ill request|library account|overdue fine|renew book|borrow limit|orcid|khazna|open access publishing|apc funding|library newsletter|library tour|alumni access|ask a librarian|library contact|library information about|how do i access|how to access|can i access|remote access|off.?campus|vpn|proxy server|thesis submission|dissertation submit|refworks|zotero|mendeley|endnote|citation manager|research consultation|information literacy session)\b/i;
+
+const DB_INFO_RE=/\b(what is|tell me about|explain|info on|information on|how (?:do i use|does|to use))\b.{0,40}(database|e.?resource|library portal|primo|scopus|web of science|ieee xplore|pubmed|sciencedirect|elsevier|springer|wiley|jstor)/i;
 
 async function routeQuery(msg, history){
+  // Order matters — most specific first
   if(isDBQuery(msg)) return 'library';
-  if(SEARCH_RE.test(msg)) return 'search';
   if(LIBRARY_RE.test(msg)) return 'library';
   if(DB_INFO_RE.test(msg)) return 'library';
 
-  // Fix 7: Improved LLM prompt — explicit bias against clarify for clear intents
+  // All search patterns
+  if(SEARCH_RE.test(msg)) return 'search';
+  if(CONTENT_FIRST_RE.test(msg)) return 'search';
+  if(WANT_CONTENT_RE.test(msg)) return 'search';
+  if(RESEARCH_TOPIC_RE.test(msg)) return 'search';
+
+  // Research questions ("what is the impact of X") — route to search
+  if(RESEARCH_QUESTION_RE.test(msg)) return 'search';
+
+  // LLM classifier for anything else
   try{
     const ctx = history.slice(-4).map(m=>`${m.role}: ${m.content}`).join('\n');
-    const txt = await callLLM({messages:[{role:'user',content:`You are routing messages for the Khalifa University (KU) Library chatbot. KU = Khalifa University, Abu Dhabi.\n\nRouting rules:\n- "search": user wants to find books, articles, papers, or academic resources on a topic\n- "library": user asks about library services, databases, hours, accounts, tools, staff, policies\n- "general": user wants a factual explanation or general knowledge answer\n- "clarify": ONLY use this if the message is genuinely ambiguous between ALL three above — prefer search/library/general over clarify\n\nContext:\n${ctx}\nMessage: "${msg}"\n\nReturn ONLY valid JSON: {"intent":"search|library|general|clarify"}`}],max_tokens:60});
+    const txt = await callLLM({messages:[{role:'user',content:`You are routing messages for the Khalifa University (KU) Library chatbot. KU = Khalifa University, Abu Dhabi.\n\nRouting rules:\n- "search": user wants to find books, articles, papers, or academic resources on a topic. Also use "search" when the user asks a research question about a topic (e.g. "what is the impact of X", "how does Y affect Z") since they likely want academic sources.\n- "library": user asks about library services, databases, hours, accounts, tools, staff, policies\n- "general": user wants a conversational factual answer and is NOT asking for academic sources\n- "clarify": ONLY use this if the message is genuinely ambiguous between ALL three above — prefer search/library/general over clarify\n\nContext:\n${ctx}\nMessage: "${msg}"\n\nReturn ONLY valid JSON: {"intent":"search|library|general|clarify"}`}],max_tokens:60});
     const s=txt.indexOf('{'), e=txt.lastIndexOf('}');
     if(s===-1) return 'general';
     const intent = JSON.parse(txt.substring(s,e+1)).intent || 'general';
-    // Extra safety: never clarify on short topical messages — treat as general
     if(intent === 'clarify' && msg.trim().split(' ').length <= 4) return 'general';
     return intent;
   }catch(e){ return 'general'; }
@@ -1041,7 +1067,7 @@ async function sendChat(){
       }
       document.getElementById(tid2)?.remove();
       chatHist.push({role:'assistant', content:reply});
-      addBotStreamed(reply); logToAdmin(msg,'agent',1); showFollowUps('general');
+      addBotStreamed(reply); logToAdmin(msg,'agent',1); showFollowUps('general', msg);
     } catch(e) { document.getElementById(tid2)?.remove(); addMsg('bot','⚠️ '+e.message); }
     return;
   }
@@ -1080,7 +1106,7 @@ async function sendChat(){
       try {
         const agentAnswer = await callAgent(msg);
         chatHist.push({role:'assistant', content:agentAnswer});
-        addBotStreamed(agentAnswer); logToAdmin(msg,'agent',1); showFollowUps('general');
+        addBotStreamed(agentAnswer); logToAdmin(msg,'agent',1); showFollowUps('general', msg);
       } catch(agentErr) {
         console.warn('Agent failed, falling back:', agentErr.message);
         // Fallback: Claude web search or GPT
@@ -1095,16 +1121,16 @@ async function sendChat(){
             }
             chatHist.push({role:'assistant', content:ws.text});
             addBotStreamed(html+' '+badge()+' <span class="model-badge" style="background:#E6F1FB;color:#0C447C">Web</span>');
-            logToAdmin(msg,'web_search',ws.sources.length); showFollowUps('general');
+            logToAdmin(msg,'web_search',ws.sources.length); showFollowUps('general', msg);
           } catch(wsErr) {
             const reply = await callLLM({system:GEN_SYS, messages:chatHist, max_tokens:400});
             chatHist.push({role:'assistant', content:reply});
-            addBotStreamed(fmt(reply)+' '+badge()); logToAdmin(msg,'llm_general',1); showFollowUps('general');
+            addBotStreamed(fmt(reply)+' '+badge()); logToAdmin(msg,'llm_general',1); showFollowUps('general', msg);
           }
         } else {
           const reply = await callLLM({system:GEN_SYS, messages:chatHist, max_tokens:400});
           chatHist.push({role:'assistant', content:reply});
-          addBotStreamed(fmt(reply)+' '+badge()); logToAdmin(msg,'llm_general',1); showFollowUps('general');
+          addBotStreamed(fmt(reply)+' '+badge()); logToAdmin(msg,'llm_general',1); showFollowUps('general', msg);
         }
       }
     }
@@ -1169,14 +1195,46 @@ async function addBotStreamed(html) {
 }
 function fmt(t){return t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank">$1</a>').replace(/\n/g,'<br>');}
 function chip(t){document.getElementById('chatIn').value=t;sendChat();}
-function showFollowUps(intent){
-  const cm=document.getElementById('chatMsgs');
-  const qs=intent==='search'?['Make it peer reviewed','Limit to 2020 onwards','Find books instead']:
-    intent==='library'?['How do I access databases?','What are the library hours?','Reserve a room']:
-    ['Search library databases & resources','Library services & information','General explanation'];
-  const d=document.createElement('div');d.className='followups';
-  d.innerHTML=qs.map(q=>`<button class="fq" onclick="chip('${q}')">${q}</button>`).join('');
-  cm.appendChild(d);cm.scrollTop=9999;
+function showFollowUps(intent, originalMsg){
+  const cm = document.getElementById('chatMsgs');
+  const qs = intent==='search'
+    ? ['Make it peer reviewed','Limit to 2020 onwards','Find books instead']
+    : intent==='library'
+    ? ['How do I access databases?','What are the library hours?','Reserve a room']
+    : ['What are the library hours?','How do I reserve a study room?'];
+  const d = document.createElement('div'); d.className='followups';
+  d.innerHTML = qs.map(q=>`<button class="fq" onclick="chip('${q}')">${q}</button>`).join('');
+  cm.appendChild(d);
+
+  // For general answers — show search recovery banner
+  if (intent === 'general' && originalMsg) {
+    showSearchRecovery(originalMsg, cm);
+  }
+  cm.scrollTop = 9999;
+}
+
+// Search recovery banner — appears after general answers
+// Lets user trigger a library search with one click from the topic in their message
+function showSearchRecovery(originalMsg, cm) {
+  // Strip common question prefixes to get the core topic
+  const topic = originalMsg
+    .replace(/^(what is the (impact|effect|role|influence|importance|significance|benefit|challenge|use|application) of|what are the (effects?|impacts?|benefits?|causes?|applications?) of|how does .{1,20} (affect|impact|influence)|tell me about|explain|what is|what are|give me a? (general )?(explanation|overview|summary) (of|about|on)?)\s*/i, '')
+    .replace(/[?.!]+$/, '')
+    .trim()
+    || originalMsg.trim();
+
+  // Cap topic length for display
+  const displayTopic = topic.length > 50 ? topic.substring(0, 47) + '…' : topic;
+  const searchQuery = `Find articles and books on ${topic}`;
+
+  const recovery = document.createElement('div');
+  recovery.className = 'search-recovery';
+  recovery.innerHTML = `
+    <span class="search-recovery-text">📚 Want academic sources on <em>"${displayTopic}"</em>?</span>
+    <button class="search-recovery-btn" onclick="chip('${searchQuery.replace(/'/g, "\\'")}')">
+      🔍 Search Library Resources
+    </button>`;
+  cm.appendChild(recovery);
 }
 
 // =================================================================
