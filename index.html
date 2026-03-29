@@ -573,7 +573,7 @@ function buildSearchCard(bool,explanation,corrected,raw,yf,yt,pr,oa,ol){
 // =================================================================
 async function buildBoolean(query,history){
   const ctx=history.slice(-6).map(m=>`${m.role}: ${m.content}`).join('\n');
-  const currentYear = new Date().getFullYear();
+  const currentYear = serverYear; // Fix 6: use authoritative server year
   const p=`You are helping build search queries for Khalifa University (KU) Library PRIMO in Abu Dhabi, UAE. KU = Khalifa University, NOT Kuwait University.
 The current year is ${currentYear}. When the user says "last 5 years", calculate: year_from = ${currentYear - 5}, year_to = ${currentYear}. "Last 3 years" = ${currentYear - 3} to ${currentYear}. "Last 10 years" = ${currentYear - 10} to ${currentYear}. "Recent" = ${currentYear - 3} to ${currentYear}. Always use actual 4-digit years, never relative words.
 
@@ -588,45 +588,80 @@ Return ONLY raw JSON:
   return JSON.parse(txt.substring(s,e+1));
 }
 
-async function fullSearch(msg, chatHist, cm) {
-  const loadEl=document.createElement('div');loadEl.className='msg bot';loadEl.style.maxWidth='96%';
-  loadEl.innerHTML=`<div class="av">🔍</div><div class="scard"><div class="typing" style="padding:8px 0"><span></span><span></span><span></span></div><div style="font-size:.8rem;color:var(--mu)">Building search query… ${badge()}</div></div>`;
-  cm.appendChild(loadEl);cm.scrollTop=cm.scrollHeight;
-
+// =================================================================
+// Fix 8: SHARED SEARCH CORE — used by both chat (fullSearch) and Search tab (doSearch)
+// Previously duplicate logic; now single code path — fix once, works everywhere
+// =================================================================
+async function executeSearch(query, opts={}) {
+  const maxR = opts.limit || parseInt(botConfig.max_results||'5');
   let p;
-  try{p=await buildBoolean(msg,chatHist);}catch(e){p={boolean:msg,natural:'Searching for: '+msg,explanation:'',year_from:'',year_to:'',peer_reviewed:false,open_access:false};}
-  const {boolean:bool,corrected,natural,explanation,year_from:yf,year_to:yt,peer_reviewed:pr,open_access:oa}=p;
+  try { p = await buildBoolean(query, opts.history||[]); }
+  catch(e) { p = {boolean:query, natural:'Searching for: '+query, explanation:'', year_from:'', year_to:'', peer_reviewed:false, open_access:false}; }
+
+  const {boolean:bool, corrected, natural, explanation, year_from:yf, year_to:yt, peer_reviewed:pr, open_access:oa} = p;
+  const finalPR = opts.pr !== undefined ? opts.pr : !!pr;
+  const finalOA = opts.oa !== undefined ? opts.oa : !!oa;
+  const finalYF = opts.yf || yf || '';
+  const finalYT = opts.yt || yt || '';
   const cleanQ = bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').trim();
 
-  // Store params globally — avoids quote-escaping issues in onclick
   const sid = 'S' + Date.now();
   window._sp = window._sp || {};
-  window._sp[sid] = {q:cleanQ, orig:msg, bool, pr:!!pr, oa:!!oa, yf:yf||'', yt:yt||''};
+  window._sp[sid] = {q:cleanQ, orig:query, bool, pr:finalPR, oa:finalOA, yf:finalYF, yt:finalYT};
 
-  const qLower = msg.toLowerCase();
-  const wantBooks = /\b(books?|ebooks?|textbooks?)\b/i.test(qLower);
-  const isMedical = MEDICAL_RE.test(qLower);
+  if (opts.onProgress) opts.onProgress({bool, natural, explanation, corrected, yf:finalYF, yt:finalYT, pr:finalPR, oa:finalOA, sid});
 
-  if (wantBooks) {
-    loadEl.innerHTML=`<div class="av">🔍</div><div class="scard"><div class="scard-title">📗 Book Search: ${natural||explanation} ${badge()}</div><div class="bool-str">${bool}</div>${buildSearchCard(bool,explanation,corrected,msg,yf,yt,pr,oa,false)}<div style="margin-top:10px;font-size:.8rem;color:var(--mu)"><div class="typing"><span></span><span></span><span></span></div> Searching PRIMO for books…</div><div id="primo-results-area"></div></div>`;
-    cm.scrollTop=cm.scrollHeight;
-    await doSearchSource(sid, 'primo', loadEl);
-    const area = loadEl.querySelector('#primo-results-area');
-    const pubmedBtn = isMedical ? `<button class="fq" onclick="doSearchNew('${sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer">🏥 Search PubMed</button>` : '';
-    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Search other scholarly sources: <span style="font-size:.72rem;color:var(--mu)">(account may be required for some)</span><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${pubmedBtn}<a href="https://www.semanticscholar.org/search?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#e0e7ff;color:#3730a3;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🎓 Go to Semantic Scholar and search</a><a href="https://consensus.app/results/?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔬 Go to Consensus and search</a><a href="https://www.perplexity.ai/search?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#f5f3ff;color:#5b21b6;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔎 Go to Perplexity and search</a></div></div>`;
-  } else {
-    // ARTICLES/RESOURCES → search PRIMO directly
-    loadEl.innerHTML=`<div class="av">🔍</div><div class="scard"><div class="scard-title">🔍 ${natural||explanation} ${badge()}</div><div class="bool-str">${bool}</div>${buildSearchCard(bool,explanation,corrected,msg,yf,yt,pr,oa,false)}<div style="margin-top:10px;font-size:.8rem;color:var(--mu)"><div class="typing"><span></span><span></span><span></span></div> Searching PRIMO…</div><div id="primo-results-area"></div></div>`;
-    cm.scrollTop=cm.scrollHeight;
-    await doSearchSource(sid, 'primo', loadEl);
-    const area = loadEl.querySelector('#primo-results-area');
-    const pubmedBtn = isMedical ? `<button class="fq" onclick="doSearchNew('${sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer">🏥 Search PubMed</button>` : '';
-    if(area) area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Search other scholarly sources: <span style="font-size:.72rem;color:var(--mu)">(account may be required for some)</span><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${pubmedBtn}<a href="https://www.semanticscholar.org/search?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#e0e7ff;color:#3730a3;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🎓 Go to Semantic Scholar and search</a><a href="https://consensus.app/results/?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔬 Go to Consensus and search</a><a href="https://www.perplexity.ai/search?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#f5f3ff;color:#5b21b6;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔎 Go to Perplexity and search</a></div></div>`;
-  }
-  chatHist.push({role:'assistant',content:`Search: ${natural||explanation}. Boolean: ${bool}`});
-  logToAdmin(msg,'search');
-  cm.scrollTop=cm.scrollHeight;
+  let results = [], total = 0, searchError = null;
+  try {
+    const data = await searchPRIMO(cleanQ, {pr:finalPR, oa:finalOA, yf:finalYF, yt:finalYT, limit:maxR});
+    results = data.results || [];
+    total = data.total || 0;
+    window._primoResults[sid] = results;
+  } catch(e) { searchError = e.message; }
+
+  return {bool, natural, explanation, corrected, sid, results, total, error:searchError,
+          yf:finalYF, yt:finalYT, pr:finalPR, oa:finalOA, query,
+          isMedical: MEDICAL_RE.test(query),
+          wantBooks: /\b(books?|ebooks?|textbooks?)\b/i.test(query)};
 }
+
+async function fullSearch(msg, chatHist, cm) {
+  const loadEl = document.createElement('div');
+  loadEl.className = 'msg bot'; loadEl.style.maxWidth = '96%';
+  loadEl.innerHTML = `<div class="av">🔍</div><div class="scard"><div class="typing" style="padding:8px 0"><span></span><span></span><span></span></div><div style="font-size:.8rem;color:var(--mu)">Building search query… ${badge()}</div></div>`;
+  cm.appendChild(loadEl); cm.scrollTop = cm.scrollHeight;
+
+  let progressData = {};
+  const res = await executeSearch(msg, {
+    history: chatHist,
+    onProgress: (d) => {
+      progressData = d;
+      const label = res?.wantBooks ? `📗 Book Search: ${d.natural||d.explanation}` : `🔍 ${d.natural||d.explanation}`;
+      loadEl.innerHTML = `<div class="av">🔍</div><div class="scard"><div class="scard-title">${label} ${badge()}</div><div class="bool-str">${d.bool}</div>${buildSearchCard(d.bool,d.explanation,d.corrected,msg,d.yf,d.yt,d.pr,d.oa,false)}<div style="margin-top:10px;font-size:.8rem;color:var(--mu)"><div class="typing"><span></span><span></span><span></span></div> Searching PRIMO…</div><div id="primo-results-area"></div></div>`;
+      cm.scrollTop = cm.scrollHeight;
+    }
+  });
+
+  const label = res.wantBooks ? `📗 Book Search: ${res.natural||res.explanation}` : `🔍 ${res.natural||res.explanation}`;
+  loadEl.innerHTML = `<div class="av">🔍</div><div class="scard"><div class="scard-title">${label} ${badge()}</div><div class="bool-str">${res.bool}</div>${buildSearchCard(res.bool,res.explanation,res.corrected,msg,res.yf,res.yt,res.pr,res.oa,false)}<div id="primo-results-area"></div></div>`;
+
+  const area = loadEl.querySelector('#primo-results-area');
+  if (res.results.length > 0) {
+    let html = `<div style="font-size:.82rem;font-weight:700;color:var(--ku-blue);margin:10px 0 6px">📄 PRIMO: Top ${res.results.length} of ${res.total.toLocaleString()} results</div>`;
+    html += res.results.map((r,i) => renderResultCard(r, i, res.sid)).join('');
+    area.innerHTML = html;
+  } else {
+    area.innerHTML = `<div style="font-size:.82rem;color:var(--mu);margin-top:8px">${res.error ? 'PRIMO error: '+res.error : 'No results found. Try refining your search.'}</div>`;
+  }
+
+  const pubmedBtn = res.isMedical ? `<button class="fq" onclick="doSearchNew('${res.sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer">🏥 Search PubMed</button>` : '';
+  area.innerHTML += `<div style="margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem">Search other scholarly sources:<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${pubmedBtn}<a href="https://www.semanticscholar.org/search?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#e0e7ff;color:#3730a3;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🎓 Semantic Scholar</a><a href="https://consensus.app/results/?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔬 Consensus</a><a href="https://www.perplexity.ai/search?q=${encodeURIComponent(msg)}" target="_blank" style="display:inline-block;padding:6px 14px;background:#f5f3ff;color:#5b21b6;border-radius:8px;text-decoration:none;font-weight:600;font-size:.8rem">🔎 Perplexity</a></div></div>`;
+
+  chatHist.push({role:'assistant', content:`Search: ${res.natural||res.explanation}. Boolean: ${res.bool}`});
+  logToAdmin(msg, 'search');
+  cm.scrollTop = cm.scrollHeight;
+}
+
 
 const MEDICAL_RE = /\b(medicine|medical|health|clinical|nursing|pharmacy|biomedical|anatomy|physiology|epidemiology|oncology|cardiology|neuroscience|genomics|pathology|surgery|mental.?health|nutrition|public.?health|disease|therapy|treatment|diagnosis|patient|drug|pharmaceutical|cancer|diabetes|heart|brain|immunology|microbiology|virology|pediatric|dental|ophthalmology|radiology)\b/i;
 
@@ -698,25 +733,48 @@ async function doSearchSource(sid, source, loadEl) {
 // =================================================================
 const DB_LIST=['sciencedirect','ieee','scopus','web of science','springer','nature journal','wiley','taylor francis','pubmed','embase','cinahl','clinicalkey','cochrane','uptodate','acm digital','scifinder','scival','jstor','proquest','emerald','knovel','ebsco','elsevier','arxiv','zendy','mdpi','asme','asce','astm','aiaa','aip','aps journal','medline','database','e-resource','eresource'];
 function isDBQuery(msg){const l=msg.toLowerCase();return DB_LIST.some(d=>l.includes(d));}
-const SEARCH_RE=/\b(find|search for|look for|show me|get me|i need|i want)\b.*(article|book|paper|journal|research|literature|publication|library resources|library databases|databases & resources)/i;
-const LIBRARY_RE=/room|booking|reserve|hours|open|closed|ill|interlibrary|loan|account|fine|fee|renew|return|borrow|orcid|khazna|open access|publish|apc|newsletter|tour|visit|alumni|ask a librarian|contact|library information about|library services/i;
 
-async function routeQuery(msg,history){
-  if(isDBQuery(msg))return'library';
-  if(SEARCH_RE.test(msg))return'search';
-  if(LIBRARY_RE.test(msg))return'library';
+// Fix 7: Expanded SEARCH_RE — catches more natural research phrasings
+const SEARCH_RE=/\b(find|search for|look for|show me|get me|i need|i want|give me|locate|recommend|suggest)\b.{0,30}(article|book|paper|journal|research|literature|publication|study|studies|resources|databases?|sources?)/i;
+
+// Fix 7: Expanded LIBRARY_RE — catches database/service questions that were slipping to clarify
+const LIBRARY_RE=/room|booking|reserve|hours|open|closed|ill|interlibrary|loan|account|fine|fee|renew|return|borrow|orcid|khazna|open access|publish|apc|newsletter|tour|visit|alumni|ask a librarian|contact|library information|library service|how do i access|how to access|can i access|remote access|off.?campus|vpn|proxy|thesis|dissertation|submit|repository|refworks|zotero|mendeley|endnote|citation manager|research consultation|instruction session|information literacy/i;
+
+// Fix 7: catch "tell me about X database/resource" patterns as library not clarify
+const DB_INFO_RE=/\b(what is|tell me about|explain|about|info on|information on|how (?:do i use|does|to use))\b.{0,40}(database|resource|library|primo|scopus|web of science|ieee|pubmed|sciencedirect|elsevier|springer|wiley|jstor)/i;
+
+async function routeQuery(msg, history){
+  if(isDBQuery(msg)) return 'library';
+  if(SEARCH_RE.test(msg)) return 'search';
+  if(LIBRARY_RE.test(msg)) return 'library';
+  if(DB_INFO_RE.test(msg)) return 'library';
+
+  // Fix 7: Improved LLM prompt — explicit bias against clarify for clear intents
   try{
-    const ctx=history.slice(-4).map(m=>`${m.role}: ${m.content}`).join('\n');
-    const txt=await callLLM({messages:[{role:'user',content:`Route this Khalifa University Library chatbot message. KU = Khalifa University, Abu Dhabi.\nContext:\n${ctx}\nMessage: "${msg}"\nReturn ONLY: {"intent":"search|library|general|clarify"}`}],max_tokens:100});
-    const s=txt.indexOf('{'),e=txt.lastIndexOf('}');
-    return JSON.parse(txt.substring(s,e+1)).intent||'general';
-  }catch(e){return'general';}
+    const ctx = history.slice(-4).map(m=>`${m.role}: ${m.content}`).join('\n');
+    const txt = await callLLM({messages:[{role:'user',content:`You are routing messages for the Khalifa University (KU) Library chatbot. KU = Khalifa University, Abu Dhabi.\n\nRouting rules:\n- "search": user wants to find books, articles, papers, or academic resources on a topic\n- "library": user asks about library services, databases, hours, accounts, tools, staff, policies\n- "general": user wants a factual explanation or general knowledge answer\n- "clarify": ONLY use this if the message is genuinely ambiguous between ALL three above — prefer search/library/general over clarify\n\nContext:\n${ctx}\nMessage: "${msg}"\n\nReturn ONLY valid JSON: {"intent":"search|library|general|clarify"}`}],max_tokens:60});
+    const s=txt.indexOf('{'), e=txt.lastIndexOf('}');
+    if(s===-1) return 'general';
+    const intent = JSON.parse(txt.substring(s,e+1)).intent || 'general';
+    // Extra safety: never clarify on short topical messages — treat as general
+    if(intent === 'clarify' && msg.trim().split(' ').length <= 4) return 'general';
+    return intent;
+  }catch(e){ return 'general'; }
 }
 
 // =================================================================
 // AGENTS — dynamic config from admin
 // =================================================================
 let botConfig = {};
+// Fix 6: authoritative year from server — avoids wrong year on devices with bad clocks
+let serverYear = new Date().getFullYear(); // safe fallback until /year responds
+async function loadServerYear() {
+  try {
+    const r = await fetch(RAG_URL + '/year');
+    if (r.ok) { const d = await r.json(); serverYear = d.year; }
+  } catch(e) { console.warn('Year fetch failed, using client year:', serverYear); }
+}
+
 let LIB_SYS=`You are the Khalifa University (KU) Library Assistant in Abu Dhabi, UAE. KU = Khalifa University, NOT Kuwait University. Answer in 2-3 sentences with links. Never mention proxy/on-campus/off-campus.\nHours: https://library.ku.ac.ae/hours | Rooms: https://library.ku.ac.ae/rooms/ | ILL: https://library.ku.ac.ae/ill/ | Account: https://khalifa.primo.exlibrisgroup.com/discovery/account?vid=971KUOSTAR_INST:KU | OA: https://library.ku.ac.ae/oa/ | Ask: https://library.ku.ac.ae/AskUs | E-resources: https://library.ku.ac.ae/eresources`;
 let GEN_SYS=`You are the Khalifa University Library Assistant, Abu Dhabi, UAE. KU = Khalifa University. Answer factually in 3-5 sentences. End with: "Would you like me to find books or articles on this from Khalifa University Library?"`;
 
@@ -782,8 +840,8 @@ function clearChat(){
   document.getElementById('chatMsgs').innerHTML = getWelcomeHTML();
   document.getElementById('chips').style.display='flex';
 }
-// Load config and show welcome on page load
-loadBotConfig().then(() => {
+// Load config + server year in parallel, then show welcome
+Promise.all([loadBotConfig(), loadServerYear()]).then(() => {
   document.getElementById('chatMsgs').innerHTML = getWelcomeHTML();
 });
 // Log every query to Cloudflare D1 analytics
@@ -931,29 +989,29 @@ async function sendChat(){
 // SEARCH TAB
 // =================================================================
 async function doSearch(){
-  const q=document.getElementById('sIn').value.trim();if(!q){alert('Enter a search term');return;}
-  const pr=document.getElementById('sPR').checked,oa=document.getElementById('sOA').checked;
-  const yf=document.getElementById('sYF').value.trim(),yt=document.getElementById('sYT').value.trim();
-  // Fix 11: apply admin max_results config
+  const q = document.getElementById('sIn').value.trim(); if(!q){alert('Enter a search term');return;}
+  const pr = document.getElementById('sPR').checked, oa = document.getElementById('sOA').checked;
+  const yf = document.getElementById('sYF').value.trim(), yt = document.getElementById('sYT').value.trim();
   const maxR = parseInt(botConfig.max_results||'10');
-  document.getElementById('sResults').innerHTML='';document.getElementById('sStatus').textContent='⏳ Building query…';
-  let p;try{p=await buildBoolean(q,[]);}catch(e){p={boolean:q,explanation:''};}
-  document.getElementById('sStatus').textContent='⏳ Searching PRIMO…';
-  const bool=p.boolean||q;
-  // Fix 9: use scoped sid for search tab results
-  const sid='ST'+Date.now();
-  let html=buildSearchCard(bool,p.explanation||'',p.corrected||q,q,yf||p.year_from,yt||p.year_to,pr||p.peer_reviewed,oa||p.open_access,false);
-  try{
-    const data=await searchPRIMO(bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').trim(),{pr:pr||p.peer_reviewed,oa:oa||p.open_access,yf:yf||p.year_from,yt:yt||p.year_to,limit:maxR});
-    window._primoResults[sid]=data.results||[];
-    if(data.results?.length){
-      html+=`<div style="font-size:.84rem;font-weight:700;color:var(--ku-blue);margin:12px 0 6px">📄 ${data.total.toLocaleString()} results found — showing top ${data.results.length}:</div>`;
-      html+=data.results.map((r,i)=>renderResultCard(r,i,sid)).join('');
-    }
-  }catch(e){html+=`<div style="font-size:.78rem;color:var(--mu);margin-top:8px">PRIMO API: ${e.message}</div>`;}
-  document.getElementById('sStatus').textContent='';
-  document.getElementById('sResults').innerHTML=html;
+  document.getElementById('sResults').innerHTML = '';
+  document.getElementById('sStatus').textContent = '⏳ Building query…';
+
+  const res = await executeSearch(q, {
+    pr, oa, yf, yt, limit: maxR,
+    onProgress: () => { document.getElementById('sStatus').textContent = '⏳ Searching PRIMO…'; }
+  });
+
+  document.getElementById('sStatus').textContent = '';
+  let html = buildSearchCard(res.bool, res.explanation||'', res.corrected||q, q, res.yf, res.yt, res.pr, res.oa, false);
+  if (res.results.length) {
+    html += `<div style="font-size:.84rem;font-weight:700;color:var(--ku-blue);margin:12px 0 6px">📄 ${res.total.toLocaleString()} results — showing top ${res.results.length}:</div>`;
+    html += res.results.map((r,i) => renderResultCard(r, i, res.sid)).join('');
+  } else {
+    html += `<div style="font-size:.78rem;color:var(--mu);margin-top:8px">${res.error ? 'PRIMO API: '+res.error : 'No results found.'}</div>`;
+  }
+  document.getElementById('sResults').innerHTML = html;
 }
+
 
 // =================================================================
 // HELPERS
