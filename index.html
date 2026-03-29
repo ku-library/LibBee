@@ -480,6 +480,15 @@ async function callAgent(question) {
   const data = await r.json();
   if (!data.answer) throw new Error(data.error || 'No answer from agent');
 
+  // If agent classified as search — signal caller to redirect to fullSearch
+  // This handles misspelled research questions that slipped past frontend routing
+  if (data.intent === 'search_academic' || data.intent === 'search_medical') {
+    const err = new Error('REDIRECT_TO_SEARCH');
+    err.redirectToSearch = true;
+    err.correctedQuery = data.corrected_query || question;
+    throw err;
+  }
+
   let html = fmt(data.answer);
 
   // Show search results if agent found any
@@ -512,7 +521,9 @@ async function callAgent(question) {
     general: '💡 General'
   }[data.intent] || '';
   html += ` ${badge()} <span class="model-badge" style="background:#f0fdf4;color:#14532d">${intentLabel}</span>`;
-  return html;
+
+  // Return both html and the corrected query so recovery banner shows clean text
+  return { html, correctedQuery: data.corrected_query || question };
 }
 
 // =================================================================
@@ -1089,11 +1100,14 @@ async function sendChat(){
     te2.innerHTML = `<div class="av">🤖</div><div class="bub"><div class="typing"><span></span><span></span><span></span></div></div>`;
     cm.appendChild(te2); cm.scrollTop=cm.scrollHeight;
     try {
-      let reply;
+      let reply, correctedQuery = msg;
       try {
         // Use agent — it adds RAG context and tool awareness
-        reply = await callAgent(msg);
+        const agentResult = await callAgent(msg);
+        reply = agentResult.html;
+        correctedQuery = agentResult.correctedQuery || msg;
       } catch(agentErr) {
+        if (agentErr.redirectToSearch) { document.getElementById(tid2)?.remove(); await fullSearch(agentErr.correctedQuery || msg, chatHist, cm); return; }
         console.warn('Agent failed for explain, falling back:', agentErr.message);
         if (activeModel === 'claude') {
           try {
@@ -1112,7 +1126,7 @@ async function sendChat(){
       }
       document.getElementById(tid2)?.remove();
       chatHist.push({role:'assistant', content:reply});
-      addBotStreamed(reply); logToAdmin(msg,'agent',1); showFollowUps('general', msg);
+      addBotStreamed(reply); logToAdmin(msg,'agent',1); showFollowUps('general', correctedQuery);
     } catch(e) { document.getElementById(tid2)?.remove(); addMsg('bot','⚠️ '+e.message); }
     return;
   }
@@ -1149,10 +1163,17 @@ async function sendChat(){
     } else {
       // General question — use multi-tool agent first, fall back to web search / LLM
       try {
-        const agentAnswer = await callAgent(msg);
-        chatHist.push({role:'assistant', content:agentAnswer});
-        addBotStreamed(agentAnswer); logToAdmin(msg,'agent',1); showFollowUps('general', msg);
+        const agentResult = await callAgent(msg);
+        const correctedQuery = agentResult.correctedQuery || msg;
+        chatHist.push({role:'assistant', content:agentResult.html});
+        addBotStreamed(agentResult.html); logToAdmin(msg,'agent',1); showFollowUps('general', correctedQuery);
       } catch(agentErr) {
+        // Agent signalled this is actually a search question (misspelling bypassed frontend routing)
+        if (agentErr.redirectToSearch) {
+          console.log('Agent redirecting to fullSearch:', agentErr.correctedQuery || msg);
+          await fullSearch(agentErr.correctedQuery || msg, chatHist, cm);
+          return;
+        }
         console.warn('Agent failed, falling back:', agentErr.message);
         // Fallback: Claude web search or GPT
         if (activeModel === 'claude') {
@@ -1202,18 +1223,36 @@ async function doSearch(){
   });
 
   document.getElementById('sStatus').textContent = '';
-  let html = buildSearchCard(res.bool, res.explanation||'', res.corrected||q, q, res.yf, res.yt, res.pr, res.oa, false);
+
+  const correctedQuery = res.corrected || q;
+  const primoKeyword = res.bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
+
+  // If spelling was corrected — update the input box and show a notice
+  const wasSpellCorrected = correctedQuery && correctedQuery.toLowerCase().trim() !== q.toLowerCase().trim();
+  if (wasSpellCorrected) {
+    document.getElementById('sIn').value = correctedQuery;
+  }
+
+  let html = '';
+
+  // "Did you mean?" notice — only shown if correction was made
+  if (wasSpellCorrected) {
+    html += `<div style="padding:8px 12px;background:#fef9c3;border-left:3px solid #C8A951;border-radius:8px;font-size:.8rem;color:#713f12;margin-bottom:10px">
+      ✏️ <strong>Spelling corrected:</strong> Searching for "<em>${correctedQuery}</em>" instead of "<em>${q}</em>"
+    </div>`;
+  }
+
+  html += buildSearchCard(res.bool, res.explanation||'', correctedQuery, q, res.yf, res.yt, res.pr, res.oa, false);
+
   if (res.results.length) {
     html += `<div style="font-size:.84rem;font-weight:700;color:var(--ku-blue);margin:12px 0 6px">📄 ${res.total.toLocaleString()} results — showing top ${res.results.length}:</div>`;
     html += res.results.map((r,i) => renderResultCard(r, i, res.sid)).join('');
   } else {
     html += `<div style="font-size:.78rem;color:var(--mu);margin-top:8px">${res.error ? 'PRIMO API: '+res.error : 'No results found.'}</div>`;
   }
-  // AI tools panel — corrected natural language for AI tools; keywords only for PRIMO AI + PubMed
-  const primoKeyword = res.bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
-  const correctedQuery = res.corrected || q;
+
+  // AI tools get corrected natural language; PRIMO AI + PubMed get keywords
   html += buildAIToolsPanel(correctedQuery, primoKeyword);
-  // PubMed — separate, medical only, gets keywords not natural language
   if (res.isMedical) {
     html += `<div style="margin-top:8px"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(primoKeyword)}" target="_blank" style="display:block;padding:8px 14px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:700;font-size:.8rem;text-align:center">🏥 Also search PubMed (medical literature) →</a></div>`;
   }
@@ -1262,10 +1301,9 @@ function showFollowUps(intent, originalMsg){
 // Search recovery banner — appears after general answers
 // Lets user trigger a library search with one click from the topic in their message
 function showSearchRecovery(originalMsg, cm) {
-  // Show the raw message as display (user already knows what they asked)
+  // originalMsg here is already the corrected query (from agent corrected_query)
+  // for fallback paths it may still be raw — either way directSearch → buildBoolean will correct it
   const displayMsg = originalMsg.length > 60 ? originalMsg.substring(0, 57) + '…' : originalMsg;
-
-  // Escape for use in onclick — single quotes escaped
   const escapedMsg = originalMsg.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
   const recovery = document.createElement('div');
