@@ -687,21 +687,63 @@ function buildAIToolsPanel(naturalQuery, primoKeyword) {
 // =================================================================
 // BOOLEAN BUILDER + PRIMO RESULTS FLOW
 // =================================================================
-async function buildBoolean(query,history){
-  const ctx=history.slice(-6).map(m=>`${m.role}: ${m.content}`).join('\n');
-  const currentYear = serverYear; // Fix 6: use authoritative server year
-  const p=`You are helping build search queries for Khalifa University (KU) Library PRIMO in Abu Dhabi, UAE. KU = Khalifa University, NOT Kuwait University.
-The current year is ${currentYear}. When the user says "last 5 years", calculate: year_from = ${currentYear - 5}, year_to = ${currentYear}. "Last 3 years" = ${currentYear - 3} to ${currentYear}. "Last 10 years" = ${currentYear - 10} to ${currentYear}. "Recent" = ${currentYear - 3} to ${currentYear}. Always use actual 4-digit years, never relative words.
+async function buildBoolean(query, history){
+  const ctx = history.slice(-6).map(m=>`${m.role}: ${m.content}`).join('\n');
+  const currentYear = serverYear;
 
-Fix spelling and build a Boolean query.
-Context:\n${ctx}\nRequest: "${query}"
+  // Pre-clean: strip common chat prefixes before sending to LLM
+  // This handles recovery button queries like "Find articles and books on X"
+  const cleanedQuery = query
+    .replace(/^(find articles and books on|find articles on|find books on|search for|look for|i want|i need|give me|show me)\s+/i, '')
+    .trim();
 
-Return ONLY raw JSON:
-{"corrected":"fixed","boolean":"(A OR B) AND (C OR D)","natural":"description","year_from":"","year_to":"","peer_reviewed":false,"open_access":false,"explanation":"one sentence"}`;
-  const txt=await callLLM({messages:[{role:'user',content:p}],max_tokens:500});
-  const s=txt.indexOf('{'),e=txt.lastIndexOf('}');
-  if(s===-1) throw new Error('no_json');
-  return JSON.parse(txt.substring(s,e+1));
+  const p = `You are a search query expert for Khalifa University (KU) Library PRIMO in Abu Dhabi, UAE.
+
+TASK: Given the user's request, do TWO things:
+1. CORRECT ALL SPELLING MISTAKES — fix every misspelled word before doing anything else
+2. BUILD a Boolean search query using the corrected words
+
+CURRENT YEAR: ${currentYear}
+- "last 5 years" → year_from=${currentYear-5}, year_to=${currentYear}
+- "last 3 years" → year_from=${currentYear-3}, year_to=${currentYear}  
+- "recent" → year_from=${currentYear-3}, year_to=${currentYear}
+- Always use 4-digit years, never relative words
+
+BOOLEAN RULES:
+- Use OR for synonyms: ("global warming" OR "climate change")
+- Use AND to combine concepts: ("global warming" OR "climate change") AND (agriculture OR "food security")
+- Use quotes for exact phrases
+- Keep it to 2-3 concept groups max — don't over-complicate
+- The "boolean" field must be KEYWORDS ONLY — never include "find articles on", "search for", or any instruction text
+
+EXAMPLES:
+Request: "impppact of globbal warming on UAE agriculture" 
+→ corrected: "impact of global warming on UAE agriculture"
+→ boolean: ("global warming" OR "climate change") AND (UAE OR "United Arab Emirates") AND (agriculture OR "food security" OR "crop yield")
+
+Request: "machine lerning in helthcare"
+→ corrected: "machine learning in healthcare"  
+→ boolean: ("machine learning" OR "deep learning" OR "artificial intelligence") AND (healthcare OR "clinical" OR "medical")
+
+Request: "find articles and books on impact of demonetisation indian economy"
+→ corrected: "impact of demonetization on Indian economy"
+→ boolean: (demonetization OR "currency reform" OR "demonetisation") AND ("Indian economy" OR India OR GDP)
+
+Context: ${ctx}
+Request: "${cleanedQuery}"
+
+Return ONLY raw JSON (no markdown, no explanation):
+{"corrected":"spell-corrected version of request","boolean":"(A OR B) AND (C OR D)","natural":"plain English description of search","year_from":"","year_to":"","peer_reviewed":false,"open_access":false,"explanation":"one sentence summary"}`;
+
+  const txt = await callLLM({messages:[{role:'user', content:p}], max_tokens:600});
+  const s = txt.indexOf('{'), e = txt.lastIndexOf('}');
+  if(s === -1) throw new Error('no_json');
+  const result = JSON.parse(txt.substring(s, e+1));
+  // Safety: if boolean still contains instruction text, fall back to corrected query
+  if(/find articles|search for|look for|i want|i need/i.test(result.boolean)) {
+    result.boolean = result.corrected || cleanedQuery;
+  }
+  return result;
 }
 
 // =================================================================
@@ -775,7 +817,9 @@ async function fullSearch(msg, chatHist, cm) {
   const pubmedBtn = res.isMedical ? `<div style="margin-top:8px"><button class="fq" onclick="doSearchNew('${res.sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer;width:100%">🏥 Also search PubMed (medical literature)</button></div>` : '';
   // AI tools panel — natural language query for all tools, PRIMO keyword for PRIMO AI
   const primoKeyword = res.bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
-  area.innerHTML += buildAIToolsPanel(msg, primoKeyword) + pubmedBtn;
+  // AI tools get corrected natural language; PRIMO AI gets keywords only
+  const correctedQuery = res.corrected || msg;
+  area.innerHTML += buildAIToolsPanel(correctedQuery, primoKeyword) + pubmedBtn;
 
   chatHist.push({role:'assistant', content:`Search: ${res.natural||res.explanation}. Boolean: ${res.bool}`});
   logToAdmin(msg, 'search');
@@ -1099,7 +1143,7 @@ async function sendChat(){
       }
     } else if(intent==='clarify'){
       const topic=msg.replace(/\b(what is|tell me about|explain|about|i want to know|can you tell me|could you explain)\b/gi,'').trim()||msg;
-      addMsg('bot',`I can help with <strong>${topic}</strong>! What would you like? ${badge()}<div style="display:flex;flex-direction:column;gap:7px;margin-top:10px"><button onclick="chip('Find articles and books on ${topic}')" style="padding:8px 12px;background:var(--ku-blue);color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:600;font-size:.8rem;text-align:left">📚 Find articles &amp; books on ${topic}</button><button onclick="chip('What are the library hours?')" style="padding:8px 12px;background:#E1F5EE;color:#0F6E56;border:1.5px solid #6ee7b7;border-radius:10px;cursor:pointer;font-weight:600;font-size:.8rem;text-align:left">🏛️ Library services &amp; information</button><button onclick="chip('Give me a general explanation of ${topic}')" style="padding:8px 12px;background:#f0f4f8;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:10px;cursor:pointer;font-weight:600;font-size:.8rem;text-align:left">💡 General explanation</button></div>`);
+      addMsg('bot',`I can help with <strong>${topic}</strong>! What would you like? ${badge()}<div style="display:flex;flex-direction:column;gap:7px;margin-top:10px"><button onclick="chip('${topic}')" style="padding:8px 12px;background:var(--ku-blue);color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:600;font-size:.8rem;text-align:left">📚 Find articles &amp; books on ${topic}</button><button onclick="chip('What are the library hours?')" style="padding:8px 12px;background:#E1F5EE;color:#0F6E56;border:1.5px solid #6ee7b7;border-radius:10px;cursor:pointer;font-weight:600;font-size:.8rem;text-align:left">🏛️ Library services &amp; information</button><button onclick="chip('Give me a general explanation of ${topic}')" style="padding:8px 12px;background:#f0f4f8;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:10px;cursor:pointer;font-weight:600;font-size:.8rem;text-align:left">💡 General explanation</button></div>`);
       chatHist.push({role:'assistant',content:`What would you like about ${topic}? Library resources or a general explanation?`});
       logToAdmin(msg,'clarify');
     } else {
@@ -1165,10 +1209,11 @@ async function doSearch(){
   } else {
     html += `<div style="font-size:.78rem;color:var(--mu);margin-top:8px">${res.error ? 'PRIMO API: '+res.error : 'No results found.'}</div>`;
   }
-  // AI tools panel — natural language query; PRIMO AI gets keyword
+  // AI tools panel — corrected natural language for AI tools; keywords only for PRIMO AI + PubMed
   const primoKeyword = res.bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
-  html += buildAIToolsPanel(q, primoKeyword);
-  // PubMed — separate, medical only
+  const correctedQuery = res.corrected || q;
+  html += buildAIToolsPanel(correctedQuery, primoKeyword);
+  // PubMed — separate, medical only, gets keywords not natural language
   if (res.isMedical) {
     html += `<div style="margin-top:8px"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(primoKeyword)}" target="_blank" style="display:block;padding:8px 14px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:700;font-size:.8rem;text-align:center">🏥 Also search PubMed (medical literature) →</a></div>`;
   }
@@ -1219,20 +1264,23 @@ function showFollowUps(intent, originalMsg){
 function showSearchRecovery(originalMsg, cm) {
   // Strip common question prefixes to get the core topic
   const topic = originalMsg
-    .replace(/^(what is the (impact|effect|role|influence|importance|significance|benefit|challenge|use|application) of|what are the (effects?|impacts?|benefits?|causes?|applications?) of|how does .{1,20} (affect|impact|influence)|tell me about|explain|what is|what are|give me a? (general )?(explanation|overview|summary) (of|about|on)?)\s*/i, '')
+    .replace(/^(what is the (impact|effect|role|influence|importance|significance|benefit|challenge|use|application) of|what are the (effects?|impacts?|benefits?|causes?|applications?|impacts?) of|how does .{1,20} (affect|impact|influence)|tell me about|explain|what is|what are|give me a? (general )?(explanation|overview|summary) (of|about|on)?)\s*/i, '')
     .replace(/[?.!]+$/, '')
     .trim()
     || originalMsg.trim();
 
   // Cap topic length for display
   const displayTopic = topic.length > 50 ? topic.substring(0, 47) + '…' : topic;
-  const searchQuery = `Find articles and books on ${topic}`;
+
+  // Pass the clean topic directly — NOT prefixed with "Find articles and books on"
+  // buildBoolean now handles prefix stripping, but cleaner input = better Boolean output
+  const escapedTopic = topic.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
   const recovery = document.createElement('div');
   recovery.className = 'search-recovery';
   recovery.innerHTML = `
     <span class="search-recovery-text">📚 Want academic sources on <em>"${displayTopic}"</em>?</span>
-    <button class="search-recovery-btn" onclick="chip('${searchQuery.replace(/'/g, "\\'")}')">
+    <button class="search-recovery-btn" onclick="chip('${escapedTopic}')">
       🔍 Search Library Resources
     </button>`;
   cm.appendChild(recovery);
