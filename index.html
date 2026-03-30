@@ -1126,6 +1126,11 @@ async function sendChat(){
 
     // ── STEP 3: Fall back to general LLM (GPT or Claude) ──
     clearInterval(statusTimer); document.getElementById(tid)?.remove();
+    // Show a fresh loading bubble for LLM step
+    const tid3 = 'ty3'+Date.now();
+    const te3 = document.createElement('div'); te3.className='msg bot'; te3.id=tid3;
+    te3.innerHTML = `<div class="av" style="background:transparent">${te.querySelector('.av').innerHTML}</div><div class="bub"><div class="typing"><span></span><span></span><span></span><span class="status-text">💭 Generating answer… please wait</span></div></div>`;
+    cm.appendChild(te3); cm.scrollTop=cm.scrollHeight;
     let reply = '';
     if(activeModel === 'claude'){
       try {
@@ -1145,12 +1150,13 @@ async function sendChat(){
     }
     // Append "find articles" button to LLM answer
     reply += addFindResourcesBtn(msg);
+    document.getElementById(tid3)?.remove();
     chatHist.push({role:'assistant', content:reply});
     addBotStreamed(reply);
     logToAdmin(msg,'llm_general',1);
 
   }catch(e){
-    clearInterval(statusTimer); document.getElementById(tid)?.remove();
+    clearInterval(statusTimer); document.getElementById(tid)?.remove(); document.getElementById(tid3)?.remove();
     addMsg('bot',`⚠️ <strong>Error:</strong> ${e.message}`);
   }
 }
