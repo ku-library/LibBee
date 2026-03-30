@@ -959,8 +959,44 @@ const EXPLICIT_SEARCH_RE=/\b(find|search for|look for|show me|get me|give me|loc
 const CONTENT_FIRST_RE=/^(articles?|papers?|books?|journals?|studies|publications?|research)\s+(on|about|regarding|related to|concerning)\s+\S/i;
 const WANT_CONTENT_RE=/\b(find me|get me|i need|i want|i'd like|i am looking for|looking for)\s+(some\s+)?(articles?|papers?|books?|journals?|research|studies|publications?)\b/i;
 
+// =================================================================
+// GLOBAL STATE — restored (was accidentally deleted in refactor)
+// =================================================================
+let chatHist = [];
+let serverYear = new Date().getFullYear();
+let botConfig = { max_results:'5', maintenance_mode:'false', maintenance_message:'', bot_personality:'', welcome_message:'' };
 
+fetch(RAG_URL+'/year').then(r=>r.json()).then(d=>{if(d.year)serverYear=d.year;}).catch(()=>{});
 
+async function loadConfig() {
+  try {
+    const r = await fetch(RAG_URL+'/config');
+    if(r.ok){ const d=await r.json(); if(d&&typeof d==='object') botConfig={...botConfig,...d}; }
+  } catch(e) { console.warn('Config load failed:',e.message); }
+}
+
+let GEN_SYS = `You are the Khalifa University Library Assistant, Abu Dhabi, UAE. KU = Khalifa University. Answer factually in 3-5 sentences. Only if the topic is clearly academic, add ONE sentence offering to find library resources.`;
+let LIB_SYS = `You are the Khalifa University Library Assistant. Answer questions about KU Library services, databases, borrowing, hours, and resources concisely (2-4 sentences). Include relevant URLs when helpful.`;
+
+function trimChatHist() { if(chatHist.length>20) chatHist=chatHist.slice(-20); }
+
+function logToAdmin(msg, intent, results) {
+  try {
+    fetch(W+'/log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg.substring(0,200),intent:intent||'unknown',results:results||0,model:activeModel,timestamp:new Date().toISOString()})}).catch(()=>{});
+  } catch(e) {}
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadConfig();
+  if(botConfig.bot_personality) GEN_SYS = botConfig.bot_personality+'\nAnswer factually in 3-5 sentences. Only if academic, offer library resources.';
+  const cm=document.getElementById('chatMsgs');
+  if(cm && cm.children.length===0){
+    const bee=`<img src="data:image/png;base64,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" alt="LibBee" style="width:28px;height:28px;object-fit:contain;border-radius:50%">`;
+    cm.innerHTML=`<div class="msg bot"><div class="av" style="background:transparent">${bee}</div><div class="bub">Hello! I'm <strong>LibBee</strong> 🐝 — the Khalifa University Library AI Assistant!<br><br>I can help with finding books &amp; articles, library services, research support, and more. Just ask!<br><br><span style="font-size:.75rem;color:var(--mu)">Switch between <strong style="color:#10A37F">ChatGPT</strong> and <strong style="color:#D97706">Claude</strong> above.</span></div></div>`;
+  }
+  const chips=document.getElementById('chips');
+  if(chips) chips.style.display='flex';
+});
 
 // Add "Find articles or books on this?" button after any answer
 function addFindResourcesBtn(msg) {
