@@ -534,7 +534,8 @@ async function callAgent(question) {
     library_info: '🏛️ Library',
     search_academic: '🔍 Academic',
     search_medical: '🏥 Medical',
-    general: '💡 General'
+    general: '💡 General',
+    general_recent: '🌐 Live Web'
   }[data.intent] || '';
   html += ` ${badge()} <span class="model-badge" style="background:#f0fdf4;color:#14532d">${intentLabel}</span>`;
 
@@ -746,6 +747,10 @@ async function buildBoolean(query, history){
     return b && /\b(AND|OR)\b/.test(b) && b.includes('(');
   }
 
+  function makeDbQuery(raw) {
+    return (raw || '').replace(/[()"]/g,'').replace(/\b(AND|OR|NOT)\b/g,' ').replace(/\s+/g,' ').trim();
+  }
+
   // === PRIMARY: HF Space /correct endpoint (separate OpenAI quota from Cloudflare) ===
   try {
     const r = await fetchWithRetry(RAG_URL + '/correct', {
@@ -761,6 +766,7 @@ async function buildBoolean(query, history){
       return {
         corrected, boolean,
         natural: result.natural || corrected,
+        database_query: result.database_query || makeDbQuery(boolean),
         year_from: result.year_from || '',
         year_to: result.year_to || '',
         peer_reviewed: !!result.peer_reviewed,
@@ -793,6 +799,7 @@ Return ONLY JSON: {"corrected":"fixed","boolean":"(A OR B) AND (C OR D)","natura
     return {
       corrected, boolean,
       natural: result.natural || corrected,
+      database_query: result.database_query || makeDbQuery(boolean),
       year_from: result.year_from || '',
       year_to: result.year_to || '',
       peer_reviewed: !!result.peer_reviewed,
@@ -804,10 +811,12 @@ Return ONLY JSON: {"corrected":"fixed","boolean":"(A OR B) AND (C OR D)","natura
   }
 
   // === FULL FALLBACK: programmatic only ===
+  const fallbackBoolean = makeBoolean(cleanedQuery);
   return {
     corrected: cleanedQuery,
-    boolean: makeBoolean(cleanedQuery),
+    boolean: fallbackBoolean,
     natural: cleanedQuery,
+    database_query: makeDbQuery(fallbackBoolean),
     year_from: '', year_to: '',
     peer_reviewed: false, open_access: false, explanation: ''
   };
@@ -823,16 +832,16 @@ async function executeSearch(query, opts={}) {
   try { p = await buildBoolean(query, opts.history||[]); }
   catch(e) { p = {boolean:query, natural:'Searching for: '+query, explanation:'', year_from:'', year_to:'', peer_reviewed:false, open_access:false}; }
 
-  const {boolean:bool, corrected, natural, explanation, year_from:yf, year_to:yt, peer_reviewed:pr, open_access:oa} = p;
+  const {boolean:bool, corrected, natural, database_query:dbQueryRaw, explanation, year_from:yf, year_to:yt, peer_reviewed:pr, open_access:oa} = p;
   const finalPR = opts.pr !== undefined ? opts.pr : !!pr;
   const finalOA = opts.oa !== undefined ? opts.oa : !!oa;
   const finalYF = opts.yf || yf || '';
   const finalYT = opts.yt || yt || '';
-  const cleanQ = bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').trim();
+  const cleanQ = (dbQueryRaw || bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ')).replace(/\s+/g,' ').trim();
 
   const sid = 'S' + Date.now();
   window._sp = window._sp || {};
-  window._sp[sid] = {q:cleanQ, orig:query, bool, pr:finalPR, oa:finalOA, yf:finalYF, yt:finalYT};
+  window._sp[sid] = {q:cleanQ, db:cleanQ, orig:query, natural:natural||corrected||query, bool, pr:finalPR, oa:finalOA, yf:finalYF, yt:finalYT};
 
   if (opts.onProgress) opts.onProgress({bool, natural, explanation, corrected, yf:finalYF, yt:finalYT, pr:finalPR, oa:finalOA, sid});
 
@@ -844,7 +853,7 @@ async function executeSearch(query, opts={}) {
     window._primoResults[sid] = results;
   } catch(e) { searchError = e.message; }
 
-  return {bool, natural, explanation, corrected, sid, results, total, error:searchError,
+  return {bool, natural, db:cleanQ, explanation, corrected, sid, results, total, error:searchError,
           yf:finalYF, yt:finalYT, pr:finalPR, oa:finalOA, query,
           isMedical: MEDICAL_RE.test(query),
           wantBooks: /\b(books?|ebooks?|textbooks?)\b/i.test(query)};
@@ -880,8 +889,7 @@ async function fullSearch(msg, chatHist, cm) {
     area.innerHTML = `<div style="font-size:.82rem;color:var(--mu);margin-top:8px">${res.error ? 'PRIMO error: '+res.error : 'No results found. Try refining your search.'}</div>`;
   }
 
-  // PubMed — separate, medical only; doSearchNew passes sp.orig (natural language) to HF Space backend
-  // "View all in PubMed" link (inside doSearchSource) uses sp.bool — PubMed supports full Boolean
+  // PubMed is treated like PRIMO here: use the processed database query rather than raw natural language.
   const pubmedBtn = res.isMedical ? `<div style="margin-top:8px"><button class="fq" onclick="doSearchNew('${res.sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer;width:100%">🏥 Also search PubMed (medical literature)</button></div>` : '';
   // AI tools panel — natural language query for all tools, PRIMO keyword for PRIMO AI
   const primoKeyword = res.bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
@@ -921,7 +929,7 @@ async function doSearchSource(sid, source, loadEl) {
     if (source === 'primo') {
       data = await searchPRIMO(sp.q, {pr:sp.pr, oa:sp.oa, yf:sp.yf, yt:sp.yt, limit:maxR});
     } else {
-      const queryForMCP = sp.orig || sp.q;
+      const queryForMCP = source === 'pubmed' ? (sp.db || sp.q) : (sp.orig || sp.natural || sp.q);
       const r = await fetchWithRetry(RAG_URL+'/search', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({query:queryForMCP, source, limit:maxR, peer_reviewed:sp.pr, open_access:sp.oa, year_from:sp.yf, year_to:sp.yt})
@@ -944,8 +952,8 @@ async function doSearchSource(sid, source, loadEl) {
         html += `<div style="text-align:center;margin-top:10px;padding:10px;background:var(--bg);border-radius:10px;font-size:.82rem"><a href="${mkURL(sp.bool,'Everything','MyInst_and_CI',[])}" target="_blank" style="color:var(--ku-blue);font-weight:700">View all ${tot.toLocaleString()} results in PRIMO →</a></div>`;
       }
       if (source === 'pubmed') {
-        // PubMed supports full Boolean — use sp.bool for precise search
-        const pubmedQ = sp.bool || sp.q;
+        // PubMed is treated like PRIMO here: use the processed database query
+        const pubmedQ = sp.db || sp.q;
         html += `<div style="text-align:center;margin-top:8px;padding:10px;background:#d1fae5;border-radius:10px;font-size:.82rem"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(pubmedQ)}" target="_blank" style="color:#065f46;font-weight:700">View all ${tot.toLocaleString()} results in PubMed →</a></div>`;
       }
       if (source === 'scholar') {
@@ -1289,7 +1297,7 @@ async function doSearch(){
   html += buildAIToolsPanel(correctedQuery, primoKeyword);
   if (res.isMedical) {
     // PubMed supports full Boolean syntax — pass res.bool directly
-    html += `<div style="margin-top:8px"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(res.bool)}" target="_blank" style="display:block;padding:8px 14px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:700;font-size:.8rem;text-align:center">🏥 Also search PubMed (medical literature) →</a></div>`;
+    html += `<div style="margin-top:8px"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(res.db || res.bool)}" target="_blank" style="display:block;padding:8px 14px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:700;font-size:.8rem;text-align:center">🏥 Also search PubMed (medical literature) →</a></div>`;
   }
   document.getElementById('sResults').innerHTML = html;
 }
