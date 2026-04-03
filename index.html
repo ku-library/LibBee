@@ -270,6 +270,8 @@ const RAG_URL = 'https://nikeshn-kulibrary.hf.space';
 // =================================================================
 const FAQ_KB = [
 
+  {q:/^\s*abdulla\s*$/i, a:'Did you mean <strong>Dr. Abdulla Al Hefeiti</strong>?<br><br><strong>Dr. Abdulla Al Hefeiti</strong> is the <strong>Library Director / Assistant Provost, Libraries</strong>. He can help with strategic and institutional matters, library leadership, and partnerships. Email: abdulla.alhefeiti@ku.ac.ae | Phone: +971 2 312 3331'},
+  {q:/^\s*hefeiti\s*$/i, a:'Did you mean <strong>Dr. Abdulla Al Hefeiti</strong>?<br><br><strong>Dr. Abdulla Al Hefeiti</strong> is the <strong>Library Director / Assistant Provost, Libraries</strong>. He can help with strategic and institutional matters, library leadership, and partnerships. Email: abdulla.alhefeiti@ku.ac.ae | Phone: +971 2 312 3331'},
   {q:/\b(system librarian|systems librarian|who is system librarian|who is systems librarian)\b/i, a:'The Systems Librarian is <strong>Walter Brian Hall</strong>. He can help with library systems, website, and technology-related issues.'},
   {q:/\b(who handles orcid|who can help.*orcid|orcid help)\b/i, a:'For ORCID, Open Access, and research impact support, contact <strong>Nikesh Narayanan</strong>.'},
   {q:/\b(who handles database access|database access problem|e-?resources? issue|remote access problem)\b/i, a:'For database and e-resources access issues, contact <strong>Rani Anand</strong>.'},
