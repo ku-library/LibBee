@@ -1126,6 +1126,19 @@ function cycleStatus(tid, key, intervalMs=3000) {
   return timer; // call clearInterval(timer) when done
 }
 
+// Helper: build social greeting quick-action buttons (avoids quote-nesting issues)
+function _socialGreetingButtons() {
+  var s = '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">';
+  s += '<button onclick="askForSubject()" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">📚 Find articles</button>';
+  s += '<button onclick="chip(this.dataset.q)" data-q="How do I get full text for an article?" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">📄 Get full text</button>';
+  s += '<button onclick="chip(this.dataset.q)" data-q="How do I request Interlibrary Loan?" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">📬 ILL Request</button>';
+  s += '<button onclick="chip(this.dataset.q)" data-q="Who can I contact at the library?" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">💬 Contact librarian</button>';
+  s += '<button onclick="chip(this.dataset.q)" data-q="What are the library hours?" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">⏰ Library hours</button>';
+  s += '</div>';
+  return s;
+}
+
+
 async function sendChat(){
   const inp=document.getElementById('chatIn');const msg=inp.value.trim();if(!msg)return;
   // Check maintenance mode
@@ -1368,13 +1381,7 @@ async function sendChat(){
 
       // For social_greeting intent, always append the quick-action buttons
       if (agentResult.intent === 'social_greeting') {
-        html += '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">' +
-          '<button onclick="askForSubject()" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">📚 Find articles</button>' +
-          '<button onclick="chip('How do I get full text for an article?')" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">📄 Get full text</button>' +
-          '<button onclick="chip('How do I request Interlibrary Loan?')" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">📬 ILL Request</button>' +
-          '<button onclick="chip('Who can I contact at the library?')" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">💬 Contact librarian</button>' +
-          '<button onclick="chip('What are the library hours?')" style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer">⏰ Library hours</button>' +
-          '</div>';
+        html += _socialGreetingButtons();
       }
 
       // For library/search answers, offer "find articles" follow-up
