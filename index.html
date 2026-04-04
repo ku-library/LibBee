@@ -53,7 +53,8 @@ header{background:var(--ku-blue);color:#fff;padding:10px 16px;display:flex;align
 .cin input:focus{border-color:var(--ku-blue)}
 .send{width:38px;height:38px;border-radius:50%;background:var(--ku-blue);color:#fff;border:none;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .clr{padding:5px 9px;background:var(--bg);border:1.5px solid var(--br);border-radius:16px;font-size:.7rem;color:var(--mu);cursor:pointer;white-space:nowrap;flex-shrink:0}
-.chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 4px}
+.chat-bottom{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--br);z-index:8;box-shadow:0 -2px 10px rgba(0,0,0,.04)}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 6px;max-height:116px;overflow-y:auto;background:#fff}
 .chip{padding:5px 11px;border-radius:20px;font-size:.74rem;border:1.5px solid var(--ku-blue);color:var(--ku-blue);cursor:pointer;background:#fff;transition:all .2s;white-space:nowrap}
 .chip:hover{background:var(--ku-blue);color:#fff}
 .scard{background:#fff;border-radius:12px;padding:14px;border:1px solid var(--br);box-shadow:0 2px 8px rgba(0,51,102,.08);width:100%}
@@ -168,18 +169,26 @@ header{background:var(--ku-blue);color:#fff;padding:10px 16px;display:flex;align
         <span style="font-size:.75rem;color:var(--mu)">Switch between <strong style="color:#10A37F">ChatGPT</strong> and <strong style="color:#D97706">Claude</strong> using the toggle above.</span>
       </div></div>
     </div>
-    <div class="chips" id="chips">
-      <div class="chip" onclick="askForSubject()">📚 Find Articles &amp; Books</div>
-      <div class="chip" onclick="chip('What are the library hours?')">⏰ Library hours</div>
-      <div class="chip" onclick="chip('How do I reserve a study room?')">🚪 Room booking</div>
-      <div class="chip" onclick="chip('How do I publish open access at Khalifa University?')">📤 OA publishing support</div>
-      <a class="chip" href="https://library.ku.ac.ae/aitools" target="_blank" style="text-decoration:none">🤖 AI Research Tools</a>
-      <a class="chip" href="https://library.ku.ac.ae/AskUs" target="_blank" style="text-decoration:none">💬 Contact a Librarian</a>
-    </div>
-    <div class="cin">
-      <button class="clr" onclick="clearChat()">🗑️ Clear Chat</button>
-      <input type="text" id="chatIn" placeholder="Ask me anything…" onkeydown="if(event.key==='Enter')sendChat()" />
-      <button class="send" onclick="sendChat()">➤</button>
+    <div class="chat-bottom">
+      <div class="chips" id="chips">
+        <div class="chip" onclick="askForSubject()">📚 Find Articles &amp; Books</div>
+        <div class="chip" onclick="chip('How do I get full text for an article?')">📄 Get Full Text</div>
+        <div class="chip" onclick="chip('What are the library hours?')">⏰ Library Hours</div>
+        <div class="chip" onclick="chip('How do I reserve a study room?')">🚪 Study Rooms</div>
+        <div class="chip" onclick="chip('How do I renew my books and check my library account?')">👤 My Library Account</div>
+        <div class="chip" onclick="chip('Which database should I use for my subject?')">🗄️ Recommended Databases</div>
+        <div class="chip" onclick="chip('I have a database access problem off campus.')">🔐 Database Access Help</div>
+        <div class="chip" onclick="chip('How do I publish open access or set up ORCID at Khalifa University?')">📤 OA &amp; ORCID</div>
+        <a class="chip" href="https://library.ku.ac.ae/aitools" target="_blank" style="text-decoration:none">🤖 AI Research Tools</a>
+        <div class="chip" onclick="chip('How do I use RefWorks and citations?')">📝 RefWorks &amp; Citations</div>
+        <div class="chip" onclick="chip('Can I request an item through Interlibrary Loan?')">📦 ILL Request</div>
+        <a class="chip" href="https://library.ku.ac.ae/AskUs" target="_blank" style="text-decoration:none">💬 Contact a Librarian</a>
+      </div>
+      <div class="cin">
+        <button class="clr" onclick="clearChat()">🗑️ Clear Chat</button>
+        <input type="text" id="chatIn" placeholder="Ask me anything…" onkeydown="if(event.key==='Enter')sendChat()" />
+        <button class="send" onclick="sendChat()">➤</button>
+      </div>
     </div>
   </div>
   <div class="panel" id="panel-search">
