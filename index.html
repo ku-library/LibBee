@@ -507,6 +507,30 @@ async function callAgent(question) {
   document.getElementById('warm-msg')?.remove();
   if (!r || !r.ok) throw new Error('Agent service unavailable');
   const data = await r.json();
+
+  // Defensive fix: if the backend returned a "no info" reply for a social question,
+  // substitute a safe LibBee identity answer so the user never sees "I don't have information".
+  const NO_INFO_PATTERNS = [
+    "i don't have", "i do not have", "no specific information",
+    "not available in", "unable to find", "cannot find", "no information about"
+  ];
+  if (data.intent === 'social_greeting' || /^(hi|hello|hey|how are you|who are you|what are you|what can you do|are you a bot)/i.test(question.trim())) {
+    const answerLower = (data.answer || '').toLowerCase().replace(/\u2019/g, "'");
+    const looksLikeNoInfo = !data.answer || NO_INFO_PATTERNS.some(p => answerLower.includes(p));
+    if (looksLikeNoInfo) {
+      const safeAnswers = {
+        'who are you': "I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. I can help you find articles and books, search databases, access full text, request Interlibrary Loan (ILL), and answer questions about library services and staff.",
+        'what are you': "I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. I can help you find articles and books, search databases, access full text, request Interlibrary Loan (ILL), and answer questions about library services and staff.",
+        'how are you': "I'm doing well, thank you! I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. How can I help you with library resources today?",
+        'what can you do': "I can help you search for articles and books, suggest databases, find full text, answer questions about library services, and connect you with the right Khalifa University Library staff member.",
+        'are you a bot': "Yes — I'm <strong>LibBee</strong>, an AI assistant for Khalifa University Library. I'm here to help with library research, databases, articles, books, full text, and library services.",
+      };
+      const q = question.trim().toLowerCase().replace(/[?!.]/g, '');
+      data.answer = safeAnswers[q] || "I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. I'm here to help with library questions, books, articles, databases, full text access, and library services. What can I help you with?";
+      data.intent = 'social_greeting';
+    }
+  }
+
   if (!data.answer) throw new Error(data.error || 'No answer from agent');
 
   // If agent classified as search — signal caller to redirect to fullSearch
@@ -1146,10 +1170,51 @@ async function sendChat(){
 
   // 0c. Pure greeting shortcut
   if (isPureGreeting(msg)) {
-    const reply = `Hi! I’m <strong>LibBee</strong>, the Khalifa University Library AI Assistant.<br><br>I can help you find articles and books, search databases, access full text, request Interlibrary Loan (ILL), and answer questions about library services and staff.<br><br>Are you looking for one of these? You can also type your question directly. ${badge()}`;
+    const reply = `Hi! I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant.<br><br>I can help you find articles and books, search databases, access full text, request Interlibrary Loan (ILL), and answer questions about library services and staff.<br><br>Are you looking for one of these? You can also type your question directly. ${badge()}`;
     addMsg('bot', reply);
-    chatHist.push({role:'assistant',content:'Hi! I’m <strong>LibBee</strong>, the Khalifa University Library AI Assistant. Are you looking for one of these?'});
+    chatHist.push({role:'assistant',content:"Hi! I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. Are you looking for one of these?"});
     window.lastIntent='social_greeting'; logToAdmin(msg,'social_greeting',0);
+    return;
+  }
+
+  // 0d. Social / self-description shortcut — hardcoded instant answers, zero API cost.
+  // These are the exact phrases that were leaking to the synthesis LLM
+  // and getting "I don't have information" back. Handled on the frontend.
+  const SOCIAL_ANSWERS = {
+    'how are you':            "I'm doing well, thank you! I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. How can I help you with library resources today?",
+    'hows it going':          "All good, thanks for asking! I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. What can I help you with?",
+    'how are you doing':      "I'm doing well, thank you! I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. How can I help you today?",
+    'who are you':            "I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. I can help you find articles and books, search databases, access full text, request Interlibrary Loan (ILL), and answer questions about library services and staff.",
+    'what are you':           "I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. I can help you find articles and books, search databases, access full text, request Interlibrary Loan (ILL), and answer questions about library services and staff.",
+    'tell me about yourself': "I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. I can help you find articles and books, search databases, access full text, request Interlibrary Loan (ILL), and answer questions about library services and staff.",
+    'what can you do':        "I can help you search for articles and books, suggest databases, find full text, answer questions about library services, and connect you with the right Khalifa University Library staff member.",
+    'what do you do':         "I help KU students and staff find articles and books, search databases, access full text, request Interlibrary Loan (ILL), and navigate library services.",
+    'how can you help':       "I can help you search for articles and books, suggest databases, find full text, answer questions about library services, and connect you with the right Khalifa University Library staff member.",
+    'what help can you provide': "I can help you search for articles and books, suggest databases, find full text, answer questions about library services, and connect you with the right Khalifa University Library staff member.",
+    'are you a bot':          "Yes — I'm <strong>LibBee</strong>, an AI assistant for Khalifa University Library. I'm here to help with library research, databases, articles, books, full text, and library services.",
+    'are you a robot':        "Yes — I'm <strong>LibBee</strong>, an AI assistant for Khalifa University Library. I'm here to help with library research, databases, articles, books, full text, and library services.",
+    'are you ai':             "Yes — I'm <strong>LibBee</strong>, an AI assistant for Khalifa University Library. I'm here to help with library research, databases, articles, books, full text, and library services.",
+    'are you an ai':          "Yes — I'm <strong>LibBee</strong>, an AI assistant for Khalifa University Library. I'm here to help with library research, databases, articles, books, full text, and library services.",
+    'thank you':              "You're welcome! Happy to help.",
+    'thanks':                 "You're welcome! Happy to help.",
+    'thx':                    "You're welcome! Happy to help.",
+    'bye':                    "Goodbye! If you need library help again, I'll be here.",
+    'goodbye':                "Goodbye! If you need library help again, I'll be here.",
+    'see you':                "See you! Come back anytime you need library help.",
+    'you are silly':          "Ha! I'll take that. I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant — silly or not, I'm here to help.",
+    'are you silly':          "Maybe a little! But I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant, and I'm genuinely good at finding articles, books, and answering library questions.",
+    'are you dumb':           "I try my best! I'm <strong>LibBee</strong>, the Khalifa University Library AI Assistant. Ask me a library question and see.",
+    'stupid bot':             "Fair enough — I'm still learning. I'm <strong>LibBee</strong>, the KU Library AI Assistant. What can I help you with?",
+    'dumb bot':               "I'll keep improving! I'm <strong>LibBee</strong>, the KU Library AI Assistant. What can I help you with?",
+  };
+  // Normalize: lowercase, strip punctuation, collapse spaces
+  const msgNorm = msg.trim().toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
+  if (SOCIAL_ANSWERS[msgNorm]) {
+    const reply = SOCIAL_ANSWERS[msgNorm] + ' ' + badge();
+    addMsg('bot', reply);
+    chatHist.push({role:'assistant', content: SOCIAL_ANSWERS[msgNorm]});
+    window.lastIntent = 'social_greeting';
+    logToAdmin(msg, 'social_greeting', 0);
     return;
   }
 
