@@ -1586,55 +1586,156 @@ async function directSearch(msg) {
 }
 
 // =================================================================
-// E-RESOURCES (same as before)
+// E-RESOURCES — SUBJECT-BASED DATABASES
 // =================================================================
-const dbs=[
-{l:'A',name:'Academic Search Ultimate',desc:'10,000+ academic journals.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=asn'},
-{l:'A',name:'ACM Digital Library',desc:'ACM publications — journals, proceedings, books.',url:'https://khalifa.idm.oclc.org/login?url=http://dl.acm.org'},
-{l:'A',name:'ACS',desc:'ACS journals in chemistry and related fields.',url:'https://khalifa.idm.oclc.org/login?url=https://pubs.acs.org'},
-{l:'A',name:'AIAA',desc:'Aerospace science journals.',url:'https://khalifa.idm.oclc.org/login?url=https://arc.aiaa.org/'},
-{l:'A',name:'AIP',desc:'Physics journals — Applied Physics Letters, etc.',url:'https://khalifa.idm.oclc.org/login?url=https://aip.scitation.org'},
-{l:'A',name:'Al Manhal',desc:'Arabic scholarly publications.',url:'https://khalifa.idm.oclc.org/login?url=https://platform.almanhal.com'},
-{l:'A',name:'Applied Science & Technology Source',desc:'Applied sciences and computing.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=aps'},
-{l:'A',name:'APS Journals',desc:'American Physical Society journals.',url:'https://khalifa.idm.oclc.org/login?url=https://journals.aps.org'},
-{l:'A',name:'arXiv.org',desc:'Open access — physics, math, CS.',url:'https://arxiv.org/'},
-{l:'A',name:'ASCE Library',desc:'Civil and structural engineering.',url:'https://khalifa.idm.oclc.org/login?url=https://ascelibrary.org'},
-{l:'A',name:'ASME Digital Library',desc:'Mechanical engineering journals.',url:'https://khalifa.idm.oclc.org/login?url=https://asmedigitalcollection.asme.org'},
-{l:'A',name:'ASTM Compass',desc:'Engineering standards.',url:'https://khalifa.idm.oclc.org/login?url=https://secure.astm.org/login'},
-{l:'C',name:'CINAHL Ultimate',desc:'Nursing and allied health.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=cul'},
-{l:'C',name:'ClinicalKey Student',desc:'Medical texts and guidelines.',url:'https://khalifa.idm.oclc.org/login?url=https://www.clinicalkey.com/student/login'},
-{l:'C',name:'Cochrane Library',desc:'Systematic reviews in healthcare.',url:'https://khalifa.idm.oclc.org/login?url=https://www.cochranelibrary.com'},
-{l:'E',name:'Ebook Central',desc:'Academic eBooks.',url:'https://khalifa.idm.oclc.org/login?url=https://ebookcentral.proquest.com/lib/khalifa'},
-{l:'E',name:'Embase',desc:'Biomedical literature.',url:'https://khalifa.idm.oclc.org/login?url=https://www.embase.com'},
-{l:'E',name:'Emerald Insight',desc:'Management and business journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.emerald.com/insight'},
-{l:'I',name:'IEEE Xplore',desc:'IEEE/IET journals and standards.',url:'https://khalifa.idm.oclc.org/login?url=https://ieeexplore.ieee.org/Xplore/dynhome.jsp'},
-{l:'I',name:'IOPScience',desc:'Physics journals.',url:'https://khalifa.idm.oclc.org/login?url=https://iopscience.iop.org'},
-{l:'J',name:'JSTOR',desc:'Archival journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.jstor.org'},
-{l:'K',name:'Knovel',desc:'Engineering reference books.',url:'https://khalifa.idm.oclc.org/login?url=https://app.knovel.com/kn'},
-{l:'M',name:'MathSciNet',desc:'Mathematical sciences.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=msn'},
-{l:'N',name:'Nature Journals',desc:'Nature-branded journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.nature.com/index.html'},
-{l:'O',name:'OnePetro',desc:'Oil and gas literature.',url:'https://khalifa.idm.oclc.org/login?url=https://www.onepetro.org/'},
-{l:'O',name:'Optica Publishing',desc:'Optics and photonics.',url:'https://khalifa.idm.oclc.org/login?url=https://opg.optica.org/default.cfm'},
-{l:'P',name:'ProQuest',desc:'19,000+ periodicals.',url:'https://khalifa.idm.oclc.org/login?url=https://search.proquest.com/?accountid=174135'},
-{l:'P',name:'PubMed @ KU',desc:'Biomedical citations.',url:'https://www.ncbi.nlm.nih.gov/pubmed/?otool=iaekustlib'},
-{l:'R',name:'RSC Journals',desc:'Royal Society of Chemistry.',url:'https://khalifa.idm.oclc.org/login?url=https://pubs.rsc.org/'},
-{l:'S',name:'ScienceDirect',desc:'Elsevier journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
-{l:'S',name:'SciFindern',desc:'Chemistry research.',url:'https://khalifa.idm.oclc.org/login?url=https://scifinder-n.cas.org'},
-{l:'S',name:'SciVal',desc:'Research performance analytics.',url:'https://khalifa.idm.oclc.org/login?url=https://scival.com/'},
-{l:'S',name:'Scopus',desc:'20,000+ journals index.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'},
-{l:'S',name:'Springer',desc:'Books and journals.',url:'https://khalifa.idm.oclc.org/login?url=https://link.springer.com'},
-{l:'T',name:'Taylor & Francis',desc:'Science and humanities journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.tandfonline.com/'},
-{l:'U',name:'UpToDate',desc:'Clinical decision support.',url:'https://khalifa.idm.oclc.org/login?url=https://www.uptodate.com/'},
-{l:'W',name:'Web of Science',desc:'11,000+ journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.webofscience.com'},
-{l:'W',name:'Wiley Online Library',desc:'Multidisciplinary collection.',url:'https://khalifa.idm.oclc.org/login?url=https://onlinelibrary.wiley.com'},
-{l:'Z',name:'Zendy',desc:'AI-powered research library.',url:'https://zendy.io/'}
+const dbSubjects=[
+  {key:'general',label:'General Research',items:[
+    {name:'PRIMO',desc:'Search books, articles, journals, databases, and more in one place.',url:'https://khalifa.primo.exlibrisgroup.com/discovery/search?vid=971KUOSTAR_INST:KU'},
+    {name:'Scopus',desc:'Multidisciplinary abstract and citation database.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'},
+    {name:'Web of Science',desc:'Citation database for multidisciplinary research and journal metrics.',url:'https://khalifa.idm.oclc.org/login?url=https://www.webofscience.com'},
+    {name:'ScienceDirect',desc:'Full-text journals and books across many disciplines.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'ProQuest',desc:'Broad multidisciplinary database platform.',url:'https://khalifa.idm.oclc.org/login?url=https://search.proquest.com/?accountid=174135'},
+    {name:'Google Scholar @ KU',desc:'Google Scholar with KU full-text access enabled.',url:'https://library.ku.ac.ae/google'}
+  ]},
+  {key:'aerospace',label:'Aerospace Engineering',items:[
+    {name:'AIAA',desc:'Aerospace science and engineering journals and conference papers.',url:'https://khalifa.idm.oclc.org/login?url=https://arc.aiaa.org/'},
+    {name:'ASME Digital Library',desc:'Mechanical and aerospace engineering journals and proceedings.',url:'https://khalifa.idm.oclc.org/login?url=https://asmedigitalcollection.asme.org'},
+    {name:'Knovel',desc:'Engineering handbooks and technical reference books.',url:'https://khalifa.idm.oclc.org/login?url=https://app.knovel.com/kn'},
+    {name:'ScienceDirect',desc:'Strong engineering journal coverage.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find aerospace literature and citations.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'}
+  ]},
+  {key:'biomedical',label:'Biomedical Engineering',items:[
+    {name:'PubMed @ KU',desc:'Biomedical and life sciences literature.',url:'https://www.ncbi.nlm.nih.gov/pubmed/?otool=iaekustlib'},
+    {name:'Embase',desc:'Biomedical literature with strong pharmacology and device coverage.',url:'https://khalifa.idm.oclc.org/login?url=https://www.embase.com'},
+    {name:'ClinicalKey Student',desc:'Medical textbooks, clinical overviews, and learning tools.',url:'https://khalifa.idm.oclc.org/login?url=https://www.clinicalkey.com/student/login'},
+    {name:'CINAHL Ultimate',desc:'Nursing and allied health literature.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=cul'},
+    {name:'Cochrane Library',desc:'Systematic reviews and evidence-based medicine.',url:'https://khalifa.idm.oclc.org/login?url=https://www.cochranelibrary.com'},
+    {name:'ScienceDirect',desc:'Biomedical engineering and medical technology journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'}
+  ]},
+  {key:'chemical',label:'Chemical Engineering',items:[
+    {name:'ACS',desc:'Chemistry and chemical engineering journals.',url:'https://khalifa.idm.oclc.org/login?url=https://pubs.acs.org'},
+    {name:'SciFindern',desc:'Chemistry research and substance/reaction searching.',url:'https://khalifa.idm.oclc.org/login?url=https://scifinder-n.cas.org'},
+    {name:'RSC Journals',desc:'Royal Society of Chemistry journals.',url:'https://khalifa.idm.oclc.org/login?url=https://pubs.rsc.org/'},
+    {name:'ScienceDirect',desc:'Chemical engineering journals and books.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find chemical engineering literature and citations.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'},
+    {name:'Knovel',desc:'Process, thermodynamics, and engineering handbooks.',url:'https://khalifa.idm.oclc.org/login?url=https://app.knovel.com/kn'}
+  ]},
+  {key:'civil',label:'Civil Engineering',items:[
+    {name:'ASCE Library',desc:'Civil and structural engineering journals and proceedings.',url:'https://khalifa.idm.oclc.org/login?url=https://ascelibrary.org'},
+    {name:'ASTM Compass',desc:'Engineering standards and specifications.',url:'https://khalifa.idm.oclc.org/login?url=https://secure.astm.org/login'},
+    {name:'Knovel',desc:'Civil engineering reference books and handbooks.',url:'https://khalifa.idm.oclc.org/login?url=https://app.knovel.com/kn'},
+    {name:'ScienceDirect',desc:'Civil engineering journal coverage.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find civil engineering research.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'}
+  ]},
+  {key:'computing',label:'Computer Engineering & Computer Science',items:[
+    {name:'IEEE Xplore',desc:'Electrical, computer engineering, and computing literature.',url:'https://khalifa.idm.oclc.org/login?url=https://ieeexplore.ieee.org/Xplore/dynhome.jsp'},
+    {name:'ACM Digital Library',desc:'Computer science journals, proceedings, and books.',url:'https://khalifa.idm.oclc.org/login?url=http://dl.acm.org'},
+    {name:'Applied Science & Technology Source',desc:'Applied sciences, computing, and technology topics.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=aps'},
+    {name:'arXiv.org',desc:'Open-access preprints in computer science, math, and physics.',url:'https://arxiv.org/'},
+    {name:'ScienceDirect',desc:'Computer science and engineering journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'}
+  ]},
+  {key:'electrical',label:'Electrical Engineering',items:[
+    {name:'IEEE Xplore',desc:'Core database for electrical engineering and standards.',url:'https://khalifa.idm.oclc.org/login?url=https://ieeexplore.ieee.org/Xplore/dynhome.jsp'},
+    {name:'Applied Science & Technology Source',desc:'Applied engineering and technology coverage.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=aps'},
+    {name:'ScienceDirect',desc:'Electrical engineering and electronics journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find electrical engineering literature and citations.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'}
+  ]},
+  {key:'energy',label:'Energy / Petroleum / Earth & Planetary Sciences',items:[
+    {name:'OnePetro',desc:'Oil, gas, and petroleum engineering literature.',url:'https://khalifa.idm.oclc.org/login?url=https://www.onepetro.org/'},
+    {name:'Knovel',desc:'Energy, petroleum, and engineering reference books.',url:'https://khalifa.idm.oclc.org/login?url=https://app.knovel.com/kn'},
+    {name:'ScienceDirect',desc:'Energy, geoscience, and petroleum journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find energy and geoscience research.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'},
+    {name:'Web of Science',desc:'Citation searching across energy and earth sciences.',url:'https://khalifa.idm.oclc.org/login?url=https://www.webofscience.com'}
+  ]},
+  {key:'management',label:'Engineering Systems & Management',items:[
+    {name:'Emerald Insight',desc:'Management, leadership, and operations journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.emerald.com/insight'},
+    {name:'Business Source Ultimate',desc:'Business and management research database.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=bsu'},
+    {name:'ProQuest',desc:'Business, management, and multidisciplinary sources.',url:'https://khalifa.idm.oclc.org/login?url=https://search.proquest.com/?accountid=174135'},
+    {name:'Scopus',desc:'Find management and systems research.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'}
+  ]},
+  {key:'ai',label:'Robotics & AI',items:[
+    {name:'IEEE Xplore',desc:'AI, robotics, control systems, and engineering applications.',url:'https://khalifa.idm.oclc.org/login?url=https://ieeexplore.ieee.org/Xplore/dynhome.jsp'},
+    {name:'ACM Digital Library',desc:'AI, machine learning, and computing literature.',url:'https://khalifa.idm.oclc.org/login?url=http://dl.acm.org'},
+    {name:'arXiv.org',desc:'Open-access preprints in AI, robotics, and machine learning.',url:'https://arxiv.org/'},
+    {name:'ScienceDirect',desc:'AI and robotics journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find AI and robotics research and citations.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'}
+  ]},
+  {key:'math',label:'Mathematics / Statistics / Data Science',items:[
+    {name:'MathSciNet',desc:'Mathematics literature and reviews.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=msn'},
+    {name:'arXiv.org',desc:'Open-access preprints in mathematics, statistics, and computing.',url:'https://arxiv.org/'},
+    {name:'ScienceDirect',desc:'Math, statistics, and data science journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find mathematical sciences literature.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'},
+    {name:'JSTOR',desc:'Strong archival coverage in mathematics and related fields.',url:'https://khalifa.idm.oclc.org/login?url=https://www.jstor.org'}
+  ]},
+  {key:'physics',label:'Physics',items:[
+    {name:'APS Journals',desc:'American Physical Society journals.',url:'https://khalifa.idm.oclc.org/login?url=https://journals.aps.org'},
+    {name:'AIP',desc:'American Institute of Physics journals and articles.',url:'https://khalifa.idm.oclc.org/login?url=https://aip.scitation.org'},
+    {name:'IOPScience',desc:'Physics journals from the Institute of Physics.',url:'https://khalifa.idm.oclc.org/login?url=https://iopscience.iop.org'},
+    {name:'Optica Publishing',desc:'Optics and photonics journals.',url:'https://khalifa.idm.oclc.org/login?url=https://opg.optica.org/default.cfm'},
+    {name:'Nature Journals',desc:'High-impact journals including physics-related titles.',url:'https://khalifa.idm.oclc.org/login?url=https://www.nature.com/index.html'},
+    {name:'arXiv.org',desc:'Open-access preprints in physics.',url:'https://arxiv.org/'}
+  ]},
+  {key:'chemistry',label:'Chemistry',items:[
+    {name:'ACS',desc:'ACS journals in chemistry and related fields.',url:'https://khalifa.idm.oclc.org/login?url=https://pubs.acs.org'},
+    {name:'RSC Journals',desc:'Royal Society of Chemistry journals.',url:'https://khalifa.idm.oclc.org/login?url=https://pubs.rsc.org/'},
+    {name:'SciFindern',desc:'Core chemistry discovery and reaction database.',url:'https://khalifa.idm.oclc.org/login?url=https://scifinder-n.cas.org'},
+    {name:'ScienceDirect',desc:'Chemistry journals and reference content.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find chemistry literature and citations.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'}
+  ]},
+  {key:'biology',label:'Cell & Molecular Biology',items:[
+    {name:'PubMed @ KU',desc:'Life sciences and biomedical literature.',url:'https://www.ncbi.nlm.nih.gov/pubmed/?otool=iaekustlib'},
+    {name:'Embase',desc:'Biomedical and pharmacological literature.',url:'https://khalifa.idm.oclc.org/login?url=https://www.embase.com'},
+    {name:'ScienceDirect',desc:'Cell biology and molecular biology journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find life sciences literature and citations.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'},
+    {name:'Nature Journals',desc:'High-impact life sciences journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.nature.com/index.html'}
+  ]},
+  {key:'medical',label:'Medicine & Health Sciences',items:[
+    {name:'PubMed @ KU',desc:'Core biomedical literature database.',url:'https://www.ncbi.nlm.nih.gov/pubmed/?otool=iaekustlib'},
+    {name:'Embase',desc:'Biomedical, drugs, and clinical medicine.',url:'https://khalifa.idm.oclc.org/login?url=https://www.embase.com'},
+    {name:'CINAHL Ultimate',desc:'Nursing and allied health literature.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=cul'},
+    {name:'Cochrane Library',desc:'Systematic reviews and evidence-based medicine.',url:'https://khalifa.idm.oclc.org/login?url=https://www.cochranelibrary.com'},
+    {name:'ClinicalKey Student',desc:'Medical textbooks and clinical learning tools.',url:'https://khalifa.idm.oclc.org/login?url=https://www.clinicalkey.com/student/login'},
+    {name:'UpToDate',desc:'Clinical decision support and point-of-care guidance.',url:'https://khalifa.idm.oclc.org/login?url=https://www.uptodate.com/'}
+  ]},
+  {key:'business',label:'Business & Management',items:[
+    {name:'Business Source Ultimate',desc:'Core business and management database.',url:'https://khalifa.idm.oclc.org/login?url=https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=ehost&defaultdb=bsu'},
+    {name:'Emerald Insight',desc:'Management, strategy, and leadership journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.emerald.com/insight'},
+    {name:'ProQuest',desc:'Business, economics, and multidisciplinary sources.',url:'https://khalifa.idm.oclc.org/login?url=https://search.proquest.com/?accountid=174135'},
+    {name:'Scopus',desc:'Find business literature and citations.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'},
+    {name:'JSTOR',desc:'Useful archival business and social sciences content.',url:'https://khalifa.idm.oclc.org/login?url=https://www.jstor.org'}
+  ]},
+  {key:'materials',label:'Materials Science / Nuclear Engineering',items:[
+    {name:'ScienceDirect',desc:'Materials science and engineering journals.',url:'https://khalifa.idm.oclc.org/login?url=https://www.sciencedirect.com'},
+    {name:'Scopus',desc:'Find materials and nuclear engineering literature.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'},
+    {name:'Web of Science',desc:'Citation searching in materials and nuclear topics.',url:'https://khalifa.idm.oclc.org/login?url=https://www.webofscience.com'},
+    {name:'AIP',desc:'Physics and materials-related journals.',url:'https://khalifa.idm.oclc.org/login?url=https://aip.scitation.org'},
+    {name:'Knovel',desc:'Materials properties and technical reference books.',url:'https://khalifa.idm.oclc.org/login?url=https://app.knovel.com/kn'}
+  ]},
+  {key:'standards',label:'Standards & Technical Reference',items:[
+    {name:'ASTM Compass',desc:'Standards, manuals, and engineering specifications.',url:'https://khalifa.idm.oclc.org/login?url=https://secure.astm.org/login'},
+    {name:'IEEE Xplore',desc:'Includes IEEE standards and technical literature.',url:'https://khalifa.idm.oclc.org/login?url=https://ieeexplore.ieee.org/Xplore/dynhome.jsp'},
+    {name:'ASME Digital Library',desc:'Mechanical engineering standards-related literature.',url:'https://khalifa.idm.oclc.org/login?url=https://asmedigitalcollection.asme.org'},
+    {name:'ASCE Library',desc:'Civil engineering standards and professional literature.',url:'https://khalifa.idm.oclc.org/login?url=https://ascelibrary.org'},
+    {name:'Knovel',desc:'Technical handbooks and engineering reference content.',url:'https://khalifa.idm.oclc.org/login?url=https://app.knovel.com/kn'}
+  ]},
+  {key:'theses',label:'Dissertations / Theses',items:[
+    {name:'ProQuest Dissertations & Theses Global',desc:'Global dissertations and theses database.',url:'https://khalifa.idm.oclc.org/login?url=https://www.proquest.com/pqdtglobal'},
+    {name:'Khazna',desc:'KU institutional repository for theses and research outputs.',url:'https://khazna.ku.ac.ae/'},
+    {name:'PRIMO',desc:'Search KU holdings and linked thesis records.',url:'https://khalifa.primo.exlibrisgroup.com/discovery/search?vid=971KUOSTAR_INST:KU'}
+  ]},
+  {key:'metrics',label:'Journal Metrics & Research Impact',items:[
+    {name:'Web of Science / Journal Citation Reports',desc:'Use Web of Science to access Journal Citation Reports for impact factor.',url:'https://khalifa.idm.oclc.org/login?url=https://www.webofscience.com'},
+    {name:'Scopus',desc:'Use for CiteScore and source-level metrics.',url:'https://khalifa.idm.oclc.org/login?url=https://www.scopus.com/home.url'},
+    {name:'SciVal',desc:'Research performance and benchmarking analytics.',url:'https://khalifa.idm.oclc.org/login?url=https://scival.com/'}
+  ]}
 ];
 function buildDB(f){
-  const letters=[...new Set(dbs.map(d=>d.l))].sort();
-  document.getElementById('abar').innerHTML=`<button class="abtn ${!f?'active':''}" onclick="buildDB('')">All</button>`+letters.map(l=>`<button class="abtn ${f===l?'active':''}" onclick="buildDB('${l}')">${l}</button>`).join('');
-  const filtered=f?dbs.filter(d=>d.l===f):dbs;const g={};
-  filtered.forEach(d=>{if(!g[d.l])g[d.l]=[];g[d.l].push(d);});
-  document.getElementById('dbList').innerHTML=Object.keys(g).sort().map(l=>`<div class="dg"><h2>${l}</h2>${g[l].map(d=>`<div class="di"><h4>${d.name}</h4><p>${d.desc}</p><a href="${d.url}" target="_blank">Access →</a></div>`).join('')}</div>`).join('');
+  document.getElementById('abar').innerHTML=`<button class="abtn ${!f?'active':''}" onclick="buildDB('')">All</button>`+
+    dbSubjects.map(s=>`<button class="abtn ${f===s.key?'active':''}" onclick="buildDB('${s.key}')" title="${s.label}">${s.label.charAt(0)}</button>`).join('');
+  const filtered=f?dbSubjects.filter(s=>s.key===f):dbSubjects;
+  document.getElementById('dbList').innerHTML=filtered.map(s=>
+    `<div class="dg"><h2>${s.label}</h2>${s.items.map(d=>`<div class="di"><h4>${d.name}</h4><p>${d.desc}</p><a href="${d.url}" target="_blank">Access →</a></div>`).join('')}</div>`
+  ).join('');
 }
 buildDB('');
 </script>
