@@ -1741,18 +1741,6 @@ function buildAtoZItems(){
     const key=(d.name+'|'+d.url).toLowerCase();
     if(!seen.has(key)){
       seen.add(key);
-      flat.append if False else None
-    }
-  }));
-  return flat;
-}
-function buildAtoZItems(){
-  const seen=new Set();
-  const flat=[];
-  dbSubjects.forEach(s=>s.items.forEach(d=>{
-    const key=(d.name+'|'+d.url).toLowerCase();
-    if(!seen.has(key)){
-      seen.add(key);
       flat.push(d);
     }
   }));
