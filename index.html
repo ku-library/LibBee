@@ -300,7 +300,8 @@ const FAQ_KB = [
   {q:/citation|how.*cite|referencing|bibliography/i, a:'For help with citations and referencing, check our Research Skills guide: <a href="https://library.ku.ac.ae/gds/" target="_blank">library.ku.ac.ae/gds</a>. The library also provides access to citation management tools.'},
   {q:/medical library|health.*library/i, a:'The Medical Library serves the College of Medicine and Health Sciences: <a href="https://library.ku.ac.ae/med/" target="_blank">library.ku.ac.ae/med</a>'},
   {q:/event|workshop|training|webinar/i, a:'Check the library events calendar for upcoming workshops and training: <a href="https://kustar.libcal.com/calendar/events/" target="_blank">Library Events Calendar</a>'},
-  {q:/database|e-?resource|electronic.*resource|which.*database/i, a:'Browse all Khalifa University Library databases at: <a href="https://library.ku.ac.ae/eresources" target="_blank">library.ku.ac.ae/eresources</a>. We have 50+ databases covering all disciplines.'},
+  {q:/^\s*(list|show|all|browse|view|see|what are|how many).*databases?\s*$/i, a:'Browse all Khalifa University Library databases at: <a href="https://library.ku.ac.ae/eresources" target="_blank">library.ku.ac.ae/eresources</a>. We have 50+ databases covering all disciplines.'},
+  {q:/^\s*databases?\s*$/i, a:'Browse all Khalifa University Library databases at: <a href="https://library.ku.ac.ae/eresources" target="_blank">library.ku.ac.ae/eresources</a>. We have 50+ databases covering all disciplines.'},
   {q:/libguide|subject.*guide|research.*guide/i, a:'Subject-specific research guides created by librarians are available at: <a href="https://library.ku.ac.ae/gds/" target="_blank">library.ku.ac.ae/gds</a>'},
   {q:/remote.*access|off.*campus|access.*home|vpn/i, a:'All electronic resources are accessible remotely with your KU credentials. Simply click the database link from <a href="https://library.ku.ac.ae/eresources" target="_blank">library.ku.ac.ae/eresources</a> and log in when prompted.'},
   {q:/plagiarism|turnitin|similarity/i, a:'For questions about plagiarism tools like Turnitin, contact your department or the library: <a href="https://library.ku.ac.ae/AskUs" target="_blank">Ask a Librarian</a>'},
@@ -1001,8 +1002,22 @@ async function doSearchSource(sid, source, loadEl) {
 // =================================================================
 // REGEX MATCHERS
 // =================================================================
-const DB_LIST=['sciencedirect','ieee','scopus','web of science','springer','nature journal','wiley','taylor francis','pubmed','embase','cinahl','clinicalkey','cochrane','uptodate','acm digital','scifinder','scival','jstor','proquest','emerald','knovel','ebsco','elsevier','arxiv','zendy','mdpi','asme','asce','astm','aiaa','aip','aps journal','medline','database','e-resource','eresource'];
-function isDBQuery(msg){const l=msg.toLowerCase();return DB_LIST.some(d=>l.includes(d));}
+// DB_LIST: specific database/publisher names only — used to detect
+// when user mentions a specific database by name.
+// IMPORTANT: isDBQuery now only fires for BARE database-name queries
+// (e.g. "IEEE Xplore", "Scopus") — NOT for questions ABOUT a database
+// (e.g. "what is Elsevier", "best database for chemistry") which should
+// go to the agent/RAG for a proper answer.
+const DB_LIST=['sciencedirect','ieee xplore','scopus','web of science','springer','nature journals','wiley','taylor francis','pubmed','embase','cinahl','clinicalkey','cochrane','uptodate','acm digital library','scifinder','scival','jstor','proquest','emerald insight','knovel','ebscohost','arxiv','asme digital','asce library','astm compass','aiaa','aip scitation','aps journals','medline','refworks','libkey'];
+// Only match if message is essentially JUST a database name — short, no question words
+function isDBQuery(msg){
+  const l = msg.trim().toLowerCase();
+  // Block: if message contains question/descriptive words, let agent handle it
+  const hasQuestionWords = /\b(what|which|how|best|good|recommend|suggest|for|about|help|access|use|find|search|chemistry|physics|engineering|medical|nursing|research|paper|article|resource|available|subscribe|trial|free|login|off.?campus|remote|can i|should i|is there|do you have|does ku|tell me|explain|describe|difference|compare|vs|versus)\b/i.test(l);
+  if (hasQuestionWords) return false;
+  // Only match if the message IS a database name (very short, specific)
+  return DB_LIST.some(d => l === d || l === d + 's') && l.split(' ').length <= 4;
+}
 
 // ── Search intent detection ──
 // Block: library service questions about articles/books (not searching for them on a topic)
@@ -1097,14 +1112,18 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 // Add "Find articles or books on this?" button after any answer
+// Uses data-q attribute to safely pass the topic — avoids all quote-nesting issues.
 function addFindResourcesBtn(msg) {
-  const safeTopic = msg.replace(/'/g, "\'").substring(0, 120);
-  return `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--br)">
-    <button onclick="chip('Find articles and books on ${safeTopic}')" 
-      style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer;white-space:nowrap">
-      📚 Find articles &amp; books on this
-    </button>
-  </div>`;
+  const topic = (msg || '').substring(0, 120)
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const queryText = 'Find articles and books on ' + (msg || '').substring(0, 100);
+  const safeQuery = queryText.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+  return '<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--br)">' +
+    '<button onclick="chip(this.dataset.q)" data-q="' + safeQuery + '" ' +
+    'style="padding:6px 12px;background:#f0f4ff;color:var(--ku-blue);border:1.5px solid var(--ku-blue);border-radius:20px;font-size:.74rem;font-weight:600;cursor:pointer;white-space:nowrap">' +
+    '📚 Find articles &amp; books on this' +
+    '</button>' +
+    '</div>';
 }
 
 
