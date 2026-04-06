@@ -685,6 +685,8 @@ function buildSearchCard(bool,explanation,corrected,raw,yf,yt,pr,oa,ol){
   const urlArt=mkURL(bool,'CentralIndex','CentralIndex',artF);
   const urlBk=mkURL(bool,'Everything','MyInst_and_CI',bkF);
   const simpleQ=bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
+  // EBSCO EDS deep link — guest access with KU customer ID (no credentials needed)
+  const ebscoUrl=`https://search.ebscohost.com/login.aspx?authtype=guest&custid=ns174973&groupid=main&profile=eds&direct=true&bquery=${encodeURIComponent(simpleQ)}`;
   // Detect if user asked for books or articles
   const q = (raw||'').toLowerCase();
   const wantBooks = /\b(books?|ebooks?|textbooks?)\b/i.test(q);
@@ -693,10 +695,11 @@ function buildSearchCard(bool,explanation,corrected,raw,yf,yt,pr,oa,ol){
   const linkArt = `<a class="slink art" href="${urlArt}" target="_blank">📄 Articles in PRIMO</a>`;
   const linkBk = `<a class="slink bk" href="${urlBk}" target="_blank">📗 Books in PRIMO</a>`;
   const linkAI = `<a class="slink ai" href="${AI_URL+encodeURIComponent(simpleQ)}" target="_blank">🤖 PRIMO AI Assistant</a>`;
+  const linkEBSCO = `<a class="slink" href="${ebscoUrl}" target="_blank" style="background:#fce7f3;color:#9d174d;border-color:#f9a8d4">📰 Search in EBSCO</a>`;
   let links;
-  if (wantBooks) links = linkBk + linkAll + linkArt + linkAI;
-  else if (wantArticles) links = linkArt + linkAll + linkBk + linkAI;
-  else links = linkAll + linkArt + linkBk + linkAI;
+  if (wantBooks) links = linkBk + linkAll + linkArt + linkAI + linkEBSCO;
+  else if (wantArticles) links = linkArt + linkAll + linkBk + linkAI + linkEBSCO;
+  else links = linkAll + linkArt + linkBk + linkAI + linkEBSCO;
   return `<div class="scard"><div class="scard-title">🔍 Search in PRIMO</div><div class="bool-str">${bool}</div><div class="slinks">${links}</div></div>`;
 }
 
@@ -939,14 +942,12 @@ async function fullSearch(msg, chatHist, cm) {
 
   // PubMed is treated like PRIMO here: use the processed database query rather than raw natural language.
   const pubmedBtn = res.isMedical ? `<div style="margin-top:8px"><button class="fq" onclick="doSearchNew('${res.sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer;width:100%">🏥 Also search PubMed (medical literature)</button></div>` : '';
-  // EBSCO EDS button — always shown
-  const edsBtn = `<div style="margin-top:8px"><button class="fq" onclick="doSearchNew('${res.sid}','eds')" style="padding:6px 14px;background:#fce7f3;color:#9d174d;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #f9a8d4;cursor:pointer;width:100%">📰 Also search EBSCO Databases (EDS)</button></div>`;
   // AI tools: use res.natural (LLM-cleaned meaningful phrase, e.g. "physics research")
   //           NOT res.corrected (which is just spell-fixed raw input, e.g. "and for physics")
   // PRIMO AI:  use primoKeyword (bare keywords stripped of Boolean operators)
   const primoKeyword = res.bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
   const aiQuery = res.natural || res.corrected || msg;
-  area.innerHTML += buildAIToolsPanel(aiQuery, primoKeyword) + pubmedBtn + edsBtn;
+  area.innerHTML += buildAIToolsPanel(aiQuery, primoKeyword) + pubmedBtn;
 
   chatHist.push({role:'assistant', content:`Search: ${res.natural||res.explanation}. Boolean: ${res.bool}`});
   logToAdmin(msg, 'search');
@@ -963,7 +964,7 @@ function doSearchNew(sid, source) {
   const cm = document.getElementById('chatMsgs');
 
   const loadEl = document.createElement('div');loadEl.className='msg bot';loadEl.style.maxWidth='96%';
-  const lbl = {primo:'📚 PRIMO',pubmed:'🏥 PubMed',scholar:'🎓 Semantic Scholar',eds:'📰 EBSCO Databases'}[source]||source;
+  const lbl = {primo:'📚 PRIMO',pubmed:'🏥 PubMed',scholar:'🎓 Semantic Scholar'}[source]||source;
   loadEl.innerHTML=`<div class="av">🔍</div><div class="scard"><div class="typing" style="padding:8px 0"><span></span><span></span><span></span></div><div style="font-size:.8rem;color:var(--mu)">Searching ${lbl}…</div><div id="primo-results-area"></div></div>`;
   cm.appendChild(loadEl);cm.scrollTop=cm.scrollHeight;
   doSearchSource(sid, source, loadEl);
@@ -1008,11 +1009,6 @@ async function doSearchSource(sid, source, loadEl) {
       }
       if (source === 'scholar') {
         html += `<div style="text-align:center;margin-top:8px;padding:10px;background:#e0e7ff;border-radius:10px;font-size:.82rem"><a href="https://www.semanticscholar.org/search?q=${encodeURIComponent(sp.orig||sp.q)}" target="_blank" style="color:#3730a3;font-weight:700">View all results in Semantic Scholar →</a></div>`;
-      }
-      if (source === 'eds') {
-        const edsQ = encodeURIComponent(sp.db || sp.q);
-        const edsUrl = `https://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=edsapi&defaultdb=edssci&direct=true&query=${edsQ}`;
-        html += `<div style="text-align:center;margin-top:8px;padding:10px;background:#fce7f3;border-radius:10px;font-size:.82rem"><a href="${edsUrl}" target="_blank" style="color:#9d174d;font-weight:700">View all ${tot.toLocaleString()} results in EBSCO →</a></div>`;
       }
 
       area.innerHTML = html;
