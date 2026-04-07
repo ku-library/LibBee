@@ -713,9 +713,9 @@ function buildAIToolsPanel(naturalQuery, primoKeyword) {
   const oaQ = naturalQuery.trim().replace(/\s+/g, '+');
   const ebscoAIUrl = `https://khalifa.idm.oclc.org/login?url=http://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=eds&direct=true&bquery=${nq}`;
   return `<div class="ai-panel">
-    <div class="ai-panel-title">🤖 AI Research Tools</div>
+    <div class="ai-panel-title">✨ Also Try These AI Research Tools</div>
 
-    <div class="ai-row-label">🔐 KU Subscribed — Register or sign in with <strong>firstname.lastname@ku.ac.ae</strong></div>
+    <div class="ai-row-label">🔐 KU Subscribed — use your KU credentials for login</div>
     <div class="ai-tools-strip" style="margin-bottom:10px">
       <a class="ai-tool-chip leapspace" href="https://www.sciencedirect.com/leapspace?query=${nq}" target="_blank">
         <span class="tc-icon">🔬</span>LeapSpace
@@ -937,28 +937,28 @@ async function fullSearch(msg, chatHist, cm) {
   loadEl.innerHTML = `<div class="av">🔍</div><div class="scard"><div class="scard-title">${label} ${badge()}</div>${buildSearchCard(res.bool,res.explanation,res.corrected,msg,res.yf,res.yt,res.pr,res.oa,false)}<div id="primo-results-area"></div></div>`;
 
   const area = loadEl.querySelector('#primo-results-area');
+  const primoKeyword = res.bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
+  const aiQuery = res.natural || res.corrected || msg;
+  const pubmedBtn = res.isMedical ? `<div style="margin-top:8px"><button class="fq" onclick="doSearchNew('${res.sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer;width:100%">🏥 Also search PubMed (medical literature)</button></div>` : '';
+
+  let html = '';
+  // ── 1. AI tools + PubMed first (small, visible) ──
+  html += buildAIToolsPanel(aiQuery, primoKeyword);
+  html += pubmedBtn;
+
+  // ── 2. PRIMO results after ──
   if (res.results.length > 0) {
-    let html = `<div style="font-size:.82rem;font-weight:700;color:var(--ku-blue);margin:10px 0 6px">📄 PRIMO: Top ${res.results.length} of ${res.total.toLocaleString()} results</div>`;
+    html += `<div style="font-size:.82rem;font-weight:700;color:var(--ku-blue);margin:12px 0 6px">📄 PRIMO: Top ${res.results.length} of ${res.total.toLocaleString()} results</div>`;
     html += res.results.map((r,i) => renderResultCard(r, i, res.sid)).join('');
-    // EBSCO "more results" banner after PRIMO results
     const ebscoMoreUrl = `https://khalifa.idm.oclc.org/login?url=http://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=eds&direct=true&bquery=${encodeURIComponent(res.natural||msg)}`;
     html += `<div style="margin-top:10px;padding:9px 12px;background:#fce7f3;border-radius:10px;border:1px solid #f9a8d4;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
       <span style="font-size:.76rem;color:#9d174d;font-weight:600">📰 Want more results? Search EBSCO databases</span>
       <a href="${ebscoMoreUrl}" target="_blank" style="padding:5px 12px;background:#9d174d;color:#fff;border-radius:8px;text-decoration:none;font-size:.74rem;font-weight:700;white-space:nowrap;flex-shrink:0">Search in EBSCO →</a>
     </div>`;
-    area.innerHTML = html;
   } else {
-    area.innerHTML = `<div style="font-size:.82rem;color:var(--mu);margin-top:8px">${res.error ? 'PRIMO error: '+res.error : 'No results found. Try refining your search.'}</div>`;
+    html += `<div style="font-size:.82rem;color:var(--mu);margin-top:8px">${res.error ? 'PRIMO error: '+res.error : 'No results found. Try refining your search.'}</div>`;
   }
-
-  // PubMed is treated like PRIMO here: use the processed database query rather than raw natural language.
-  const pubmedBtn = res.isMedical ? `<div style="margin-top:8px"><button class="fq" onclick="doSearchNew('${res.sid}','pubmed')" style="padding:6px 14px;background:#d1fae5;color:#065f46;border-radius:8px;font-weight:600;font-size:.8rem;border:1px solid #6ee7b7;cursor:pointer;width:100%">🏥 Also search PubMed (medical literature)</button></div>` : '';
-  // AI tools: use res.natural (LLM-cleaned meaningful phrase, e.g. "physics research")
-  //           NOT res.corrected (which is just spell-fixed raw input, e.g. "and for physics")
-  // PRIMO AI:  use primoKeyword (bare keywords stripped of Boolean operators)
-  const primoKeyword = res.bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
-  const aiQuery = res.natural || res.corrected || msg;
-  area.innerHTML += buildAIToolsPanel(aiQuery, primoKeyword) + pubmedBtn;
+  area.innerHTML = html;
 
   chatHist.push({role:'assistant', content:`Search: ${res.natural||res.explanation}. Boolean: ${res.bool}`});
   logToAdmin(msg, 'search');
@@ -1550,10 +1550,17 @@ async function doSearch(){
 
   html += buildSearchCard(res.bool, res.explanation||'', correctedQuery, q, res.yf, res.yt, res.pr, res.oa, false);
 
+  // ── 1. AI tools + PubMed first (small, visible) ──
+  const aiQuery = res.natural || correctedQuery;
+  html += buildAIToolsPanel(aiQuery, primoKeyword);
+  if (res.isMedical) {
+    html += `<div style="margin-top:8px"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(res.db || res.bool)}" target="_blank" style="display:block;padding:8px 14px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:700;font-size:.8rem;text-align:center">🏥 Also search PubMed (medical literature) →</a></div>`;
+  }
+
+  // ── 2. PRIMO results after ──
   if (res.results.length) {
     html += `<div style="font-size:.84rem;font-weight:700;color:var(--ku-blue);margin:12px 0 6px">📄 ${res.total.toLocaleString()} results — showing top ${res.results.length}:</div>`;
     html += res.results.map((r,i) => renderResultCard(r, i, res.sid)).join('');
-    // EBSCO "more results" link after PRIMO results
     const ebscoMoreUrl = `https://khalifa.idm.oclc.org/login?url=http://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=eds&direct=true&bquery=${encodeURIComponent(res.natural||correctedQuery)}`;
     html += `<div style="margin-top:10px;padding:10px 14px;background:#fce7f3;border-radius:10px;border:1px solid #f9a8d4;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
       <span style="font-size:.78rem;color:#9d174d;font-weight:600">📰 Want more results? Search the same query across all EBSCO databases</span>
@@ -1561,15 +1568,6 @@ async function doSearch(){
     </div>`;
   } else {
     html += `<div style="font-size:.78rem;color:var(--mu);margin-top:8px">${res.error ? 'PRIMO API: '+res.error : 'No results found.'}</div>`;
-  }
-
-  // AI tools: use natural (LLM-cleaned meaningful phrase) not corrected (raw spell-fixed input)
-  // This ensures AI tools get a proper research phrase, not a chat fragment
-  const aiQuery = res.natural || correctedQuery;
-  html += buildAIToolsPanel(aiQuery, primoKeyword);
-  if (res.isMedical) {
-    // PubMed supports full Boolean syntax — pass res.bool directly
-    html += `<div style="margin-top:8px"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(res.db || res.bool)}" target="_blank" style="display:block;padding:8px 14px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:700;font-size:.8rem;text-align:center">🏥 Also search PubMed (medical literature) →</a></div>`;
   }
   document.getElementById('sResults').innerHTML = html;
 }
