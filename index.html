@@ -80,9 +80,9 @@ header{background:var(--ku-blue);color:#fff;padding:10px 16px;display:flex;align
 .ai-tool-chip.ebscoai{background:#fce7f3;color:#9d174d;border-color:#f9a8d4}
 .ai-tool-chip.primoai{background:linear-gradient(135deg,#fef9c3,#ede9fe);color:#5b21b6;border-color:#c4b5fd}
 .ai-tool-chip.consensus{background:#fdf4ff;color:#86198f;border-color:#f0abfc}
-.ai-tool-chip.elicit{background:#ecfdf5;color:#065f46;border-color:#6ee7b7}
+.ai-tool-chip.scispace{background:#ecfdf5;color:#065f46;border-color:#6ee7b7}
 .ai-tool-chip.perplexity{background:#f5f3ff;color:#4c1d95;border-color:#ddd6fe}
-.ai-tool-chip.resrabbit{background:#fff1f2;color:#9f1239;border-color:#fecdd3}
+.ai-tool-chip.openalex{background:#f0f9ff;color:#0c4a6e;border-color:#bae6fd}
 @media(max-width:480px){.ai-tools-strip{gap:4px}}
 .confirm-box{background:#f0f4f8;border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:.84rem;line-height:1.6;border-left:3px solid var(--ku-gold)}
 .confirm-btns{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
@@ -709,6 +709,8 @@ function buildSearchCard(bool,explanation,corrected,raw,yf,yt,pr,oa,ol){
 function buildAIToolsPanel(naturalQuery, primoKeyword) {
   const nq = encodeURIComponent(naturalQuery);
   const pk = encodeURIComponent(primoKeyword);
+  // OpenAlex uses search.semantic with + separated words
+  const oaQ = naturalQuery.trim().replace(/\s+/g, '+');
   const ebscoAIUrl = `https://khalifa.idm.oclc.org/login?url=http://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=eds&direct=true&bquery=${nq}`;
   return `<div class="ai-panel">
     <div class="ai-panel-title">🤖 AI Research Tools</div>
@@ -734,14 +736,14 @@ function buildAIToolsPanel(naturalQuery, primoKeyword) {
       <a class="ai-tool-chip consensus" href="https://consensus.app/results/?q=${nq}" target="_blank">
         <span class="tc-icon">🧬</span>Consensus
       </a>
-      <a class="ai-tool-chip elicit" href="https://elicit.com/?q=${nq}" target="_blank">
-        <span class="tc-icon">🧪</span>Elicit
+      <a class="ai-tool-chip scispace" href="https://scispace.com/search?q=${nq}" target="_blank">
+        <span class="tc-icon">🧪</span>SciSpace
       </a>
       <a class="ai-tool-chip perplexity" href="https://www.perplexity.ai/search?q=${nq}" target="_blank">
         <span class="tc-icon">🔎</span>Perplexity
       </a>
-      <a class="ai-tool-chip resrabbit" href="https://www.researchrabbit.ai/" target="_blank">
-        <span class="tc-icon">🐰</span>Research Rabbit
+      <a class="ai-tool-chip openalex" href="https://openalex.org/works?page=1&sort=relevance_score:desc&search.semantic=${oaQ}" target="_blank">
+        <span class="tc-icon">🌐</span>OpenAlex
       </a>
     </div>
   </div>`;
