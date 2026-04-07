@@ -917,13 +917,13 @@ async function fullSearch(msg, chatHist, cm) {
     onProgress: (d) => {
       progressData = d;
       const label = wantBooksEarly ? `📗 Book Search: ${d.natural||d.explanation}` : `🔍 ${d.natural||d.explanation}`;
-      loadEl.innerHTML = `<div class="av">🔍</div><div class="scard"><div class="scard-title">${label} ${badge()}</div><div class="bool-str">${d.bool}</div>${buildSearchCard(d.bool,d.explanation,d.corrected,msg,d.yf,d.yt,d.pr,d.oa,false)}<div style="margin-top:10px;font-size:.8rem;color:var(--mu)"><div class="typing"><span></span><span></span><span></span></div> Searching PRIMO…</div><div id="primo-results-area"></div></div>`;
+      loadEl.innerHTML = `<div class="av">🔍</div><div class="scard"><div class="scard-title">${label} ${badge()}</div>${buildSearchCard(d.bool,d.explanation,d.corrected,msg,d.yf,d.yt,d.pr,d.oa,false)}<div style="margin-top:10px;font-size:.8rem;color:var(--mu)"><div class="typing"><span></span><span></span><span></span></div> Searching PRIMO…</div><div id="primo-results-area"></div></div>`;
       cm.scrollTop = cm.scrollHeight;
     }
   });
 
   const label = res.wantBooks ? `📗 Book Search: ${res.natural||res.explanation}` : `🔍 ${res.natural||res.explanation}`;
-  loadEl.innerHTML = `<div class="av">🔍</div><div class="scard"><div class="scard-title">${label} ${badge()}</div><div class="bool-str">${res.bool}</div>${buildSearchCard(res.bool,res.explanation,res.corrected,msg,res.yf,res.yt,res.pr,res.oa,false)}<div id="primo-results-area"></div></div>`;
+  loadEl.innerHTML = `<div class="av">🔍</div><div class="scard"><div class="scard-title">${label} ${badge()}</div>${buildSearchCard(res.bool,res.explanation,res.corrected,msg,res.yf,res.yt,res.pr,res.oa,false)}<div id="primo-results-area"></div></div>`;
 
   const area = loadEl.querySelector('#primo-results-area');
   if (res.results.length > 0) {
