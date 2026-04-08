@@ -1743,7 +1743,7 @@ async function addBotStreamed(html) {
   appendFeedbackBox(el, window.lastAskedMsg||'', html, window.lastIntent||'');
   cm.scrollTop=9999;
 }
-function fmt(t){return t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank">$1</a>').replace(/\n/g,'<br>');}
+function fmt(t){return t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\*(.*?)\*/g,'<em>$1</em>').replace(/(?<!href=["'])(https?:\/\/[^\s<"']+)/g,'<a href="$1" target="_blank">$1</a>').replace(/\n/g,'<br>');}
 function chip(t){document.getElementById('chatIn').value=t;sendChat();}
 
 // Handler: user confirmed — answer from general LLM knowledge
