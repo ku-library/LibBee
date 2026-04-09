@@ -307,6 +307,54 @@ let chatHistory = [];
 let isSending = false;
 window._primoResults = {};
 
+const STORAGE_KEYS = {
+  sessionId: 'libbee_session_id',
+  searchContexts: 'libbee_search_contexts',
+  activeContextId: 'libbee_active_search_context_id'
+};
+
+function makeSessionId() {
+  return (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'libbee-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+}
+
+let libbeeSessionId = localStorage.getItem(STORAGE_KEYS.sessionId) || makeSessionId();
+localStorage.setItem(STORAGE_KEYS.sessionId, libbeeSessionId);
+
+let recentSearchContexts = [];
+try {
+  recentSearchContexts = JSON.parse(localStorage.getItem(STORAGE_KEYS.searchContexts) || '[]');
+  if (!Array.isArray(recentSearchContexts)) recentSearchContexts = [];
+} catch (_) {
+  recentSearchContexts = [];
+}
+let activeSearchContextId = localStorage.getItem(STORAGE_KEYS.activeContextId) || '';
+
+function persistClientState() {
+  localStorage.setItem(STORAGE_KEYS.sessionId, libbeeSessionId);
+  localStorage.setItem(STORAGE_KEYS.searchContexts, JSON.stringify(recentSearchContexts.slice(0, 5)));
+  if (activeSearchContextId) localStorage.setItem(STORAGE_KEYS.activeContextId, activeSearchContextId);
+  else localStorage.removeItem(STORAGE_KEYS.activeContextId);
+}
+
+function upsertSearchContext(ctx) {
+  if (!ctx || !ctx.context_id) return;
+  recentSearchContexts = [ctx, ...recentSearchContexts.filter(x => x.context_id !== ctx.context_id)].slice(0, 5);
+  activeSearchContextId = ctx.context_id;
+  persistClientState();
+}
+
+function getClientStatePayload(meta = {}) {
+  return {
+    session_id: libbeeSessionId,
+    active_search_context_id: meta.contextId || activeSearchContextId || null,
+    recent_search_contexts: recentSearchContexts.slice(0, 5),
+    follow_up_action: meta.followUpAction || null,
+    follow_up_context_id: meta.contextId || null
+  };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // UTILITIES
 // ═══════════════════════════════════════════════════════════════
@@ -404,17 +452,33 @@ function setSending(v) {
   document.getElementById('chatIn').disabled = v;
 }
 
-function showFollowUps(intent, topic) {
+function showFollowUps(promptText, suggestions = []) {
+  if (!promptText && (!suggestions || suggestions.length === 0)) return;
   const cm = document.getElementById('chatMsgs');
-  const qs = intent === 'search'
-    ? ['Make it peer reviewed', 'Limit to last 5 years', 'Find books instead']
-    : intent === 'library'
-    ? ['How do I access databases?', 'What are the library hours?', 'Reserve a study room']
-    : ['What are the library hours?', 'How do I reserve a study room?', 'Find articles on this topic'];
-  const d = document.createElement('div'); d.className = 'followups';
-  d.innerHTML = qs.map(q => `<button class="fq" onclick="sendChat(${JSON.stringify(q)})">${q}</button>`).join('');
-  cm.appendChild(d);
-  if (intent === 'general' && topic) showSearchRecovery(topic);
+
+  if (promptText) {
+    const p = document.createElement('div');
+    p.className = 'search-recovery';
+    p.innerHTML = `<span class="search-recovery-text">❓ ${promptText}</span>`;
+    cm.appendChild(p);
+  }
+
+  if (suggestions && suggestions.length > 0) {
+    const d = document.createElement('div');
+    d.className = 'followups';
+    suggestions.forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'fq';
+      btn.textContent = s.label || s.question || 'Follow up';
+      btn.addEventListener('click', () => sendChat(s.question || s.label || '', {
+        followUpAction: s.action || null,
+        contextId: s.context_id || null
+      }));
+      d.appendChild(btn);
+    });
+    cm.appendChild(d);
+  }
+
   cm.scrollTop = cm.scrollHeight;
 }
 
@@ -458,6 +522,9 @@ function appendFeedback(msgEl, question, answerHtml) {
 // ═══════════════════════════════════════════════════════════════
 function clearChat() {
   chatHistory = [];
+  recentSearchContexts = [];
+  activeSearchContextId = '';
+  persistClientState();
   document.getElementById('chatMsgs').innerHTML = '';
   document.getElementById('chips').style.display = 'flex';
   document.getElementById('chatIn').value = '';
@@ -467,10 +534,10 @@ function clearChat() {
 // ═══════════════════════════════════════════════════════════════
 // MAIN CHAT — calls /agent on HF Space directly
 // ═══════════════════════════════════════════════════════════════
-async function sendChat(text) {
+async function sendChat(text, meta = {}) {
   if (isSending) return;
   const input = document.getElementById('chatIn');
-  const question = text || input.value.trim();
+  const question = (text || input.value.trim());
   if (!question) return;
 
   if (!text) input.value = '';
@@ -489,33 +556,30 @@ async function sendChat(text) {
       body: JSON.stringify({
         question,
         model: currentModel,
-        history: chatHistory.slice(-10)
+        history: chatHistory.slice(-10),
+        client_state: getClientStatePayload(meta)
       })
     });
 
     hideTyping();
-
     if (!res.ok) throw new Error('Server error: ' + res.status);
     const data = await res.json();
-
     if (!data.answer) throw new Error('Empty response from server');
 
-    // Store plain text in history (no HTML tags reaching the LLM)
+    if (data.search_context) upsertSearchContext(data.search_context);
+
     chatHistory.push({ role: 'assistant', content: stripHtml(data.answer) });
     trimHistory();
 
-    // Build display HTML
     let html = fmt(data.answer);
 
-    // Append search results if agent found any
     if (data.search_results && data.search_results.length > 0) {
       const sid = 'AG' + Date.now();
       window._primoResults[sid] = data.search_results;
       html += '<div style="margin-top:10px;font-size:.82rem;font-weight:700;color:var(--ku-blue)">📄 Results found:</div>';
-      html += data.search_results.slice(0, 4).map((r, i) => renderResultCard(r, i, sid)).join('');
+      html += data.search_results.slice(0, 6).map((r, i) => renderResultCard(r, i, sid)).join('');
     }
 
-    // Show sources
     if (data.sources && data.sources.length > 0) {
       html += '<div style="margin-top:8px;font-size:.75rem;color:var(--mu)"><strong>Sources:</strong> ';
       html += data.sources.map(s => s.url
@@ -524,7 +588,6 @@ async function sendChat(text) {
       html += '</div>';
     }
 
-    // Ask a Librarian footer for library_info intent
     if (data.ask_librarian === true) {
       html += '<div style="margin-top:10px;padding:10px 12px;background:#f0f4ff;border-radius:10px;border:1px solid #c4b5fd;font-size:.8rem;color:#3730a3">' +
         '💬 <strong>Need more help?</strong> ' +
@@ -532,20 +595,19 @@ async function sendChat(text) {
         'or email <a href="mailto:libse@ku.ac.ae" style="color:var(--ku-blue)">libse@ku.ac.ae</a></div>';
     }
 
-    // For search intents — show AI research tools
     if (['search_academic', 'search_medical'].includes(data.intent)) {
-      const q = data.natural_query || data.corrected_query || question;
-      html += buildAIToolsPanel(q, q);
+      const aiQuery = data.ai_tool_query || data.natural_query || question;
+      html += buildAIToolsPanel(aiQuery);
     }
 
     const msgEl = addMsg('bot', html);
     appendFeedback(msgEl, question, html);
 
-    // Follow-up suggestions
-    const intent = data.intent || 'general';
-    if (intent === 'library_info') showFollowUps('library', question);
-    else if (['search_academic', 'search_medical'].includes(intent)) showFollowUps('search', data.corrected_query || question);
-    else showFollowUps('general', data.corrected_query || question);
+    if (data.follow_up_question || (data.follow_up_suggestions && data.follow_up_suggestions.length > 0)) {
+      showFollowUps(data.follow_up_question || '', data.follow_up_suggestions || []);
+    } else if (data.intent === 'general' && (data.corrected_query || question)) {
+      showSearchRecovery(data.corrected_query || question);
+    }
 
   } catch (e) {
     hideTyping();
@@ -631,7 +693,7 @@ async function executeSearch(query, opts = {}) {
       <a class="slink art" href="${urlArt}" target="_blank">📄 Articles</a>
       <a class="slink bk"  href="${urlBk}"  target="_blank">📗 Books</a>
     </div>
-    ${buildAIToolsPanel(query, dbQuery)}
+    ${buildAIToolsPanel(query)}
     <div style="margin-top:10px;font-size:.8rem;color:var(--mu);display:flex;align-items:center;gap:6px">
       <div class="typing"><span></span><span></span><span></span></div>
       <span>Fetching PRIMO results…</span>
@@ -731,7 +793,7 @@ async function doSearch() {
     </div>`;
 
     // AI tools
-    html += buildAIToolsPanel(query, dbQuery);
+    html += buildAIToolsPanel(query);
 
     // PubMed for medical topics
     if (isMedical) {
@@ -763,10 +825,10 @@ async function doSearch() {
 // ═══════════════════════════════════════════════════════════════
 // AI TOOLS PANEL
 // ═══════════════════════════════════════════════════════════════
-function buildAIToolsPanel(naturalQuery, primoKeyword) {
-  const nq = encodeURIComponent(naturalQuery);
-  const pk = encodeURIComponent(primoKeyword || naturalQuery);
-  const oaQ = naturalQuery.trim().replace(/\s+/g, '+');
+function buildAIToolsPanel(naturalQuery) {
+  const cleanQuery = (naturalQuery || '').trim();
+  const nq = encodeURIComponent(cleanQuery);
+  const oaQ = cleanQuery.replace(/\s+/g, '+');
   const ebscoUrl = `https://khalifa.idm.oclc.org/login?url=http://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=eds&direct=true&bquery=${nq}`;
   return `<div class="ai-panel">
     <div class="ai-panel-title">✨ Also Try These AI Research Tools</div>
@@ -775,7 +837,7 @@ function buildAIToolsPanel(naturalQuery, primoKeyword) {
       <a class="ai-tool-chip leapspace" href="https://www.sciencedirect.com/leapspace?query=${nq}" target="_blank">🔬 LeapSpace</a>
       <a class="ai-tool-chip scopus" href="https://www-scopus-com.khalifa.idm.oclc.org/pages/ai?query=${nq}" target="_blank">🔭 Scopus AI</a>
       <a class="ai-tool-chip ebscoai" href="${ebscoUrl}" target="_blank">📰 EBSCO AI</a>
-      <a class="ai-tool-chip primoai" href="${PRIMO_AI_URL}${pk}" target="_blank">⭐ PRIMO AI</a>
+      <a class="ai-tool-chip primoai" href="${PRIMO_AI_URL}${nq}" target="_blank">⭐ PRIMO AI</a>
     </div>
     <div class="ai-row-label">🆓 Freemium</div>
     <div class="ai-tools-strip">
