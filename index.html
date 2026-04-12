@@ -597,7 +597,7 @@ async function sendChat(text, meta = {}) {
 
     if (['search_academic', 'search_medical'].includes(data.intent)) {
       const aiQuery = data.ai_tool_query || data.natural_query || question;
-      html += buildAIToolsPanel(aiQuery, data.primo_search_url || '');
+      html += buildAIToolsPanel(aiQuery, data.primo_search_url || '', data.primo_ai_url || '');
     }
 
     const msgEl = addMsg('bot', html);
@@ -658,31 +658,61 @@ function sanitizeBoolean(b) {
 function encodeQ(s) { return encodeURIComponent(s).replace(/%20/g,'+'); }
 
 function buildPrimoURL(bool, tab, scope, facets) {
-  const q = sanitizeBoolean(bool).replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim();
+  const q = sanitizeBoolean(bool);
   let u = `${PRIMO_BASE}?query=any,contains,${encodeQ(q)}&tab=${tab}&search_scope=${scope}&vid=${VID}&lang=en&mode=advanced&offset=0`;
   for (const f of facets) u += '&facet=' + f;
   return u;
+}
+
+async function prepareSearchPlan(question, opts = {}) {
+  try {
+    const res = await fetchWithTimeout(API_URL + '/search/plan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question,
+        peer_reviewed: !!opts.pr,
+        open_access: !!opts.oa,
+        year_from: opts.yf || null,
+        year_to: opts.yt || null
+      })
+    });
+    if (!res.ok) throw new Error('Search plan error: ' + res.status);
+    return await res.json();
+  } catch (e) {
+    const bool = makeBoolean(question);
+    const dbQuery = bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim().substring(0, 500);
+    return {
+      topic: question,
+      resource_type: /\b(book|books|ebook|ebooks)\b/i.test(question) ? 'books' : 'articles',
+      is_medical: /\b(medicine|medical|health|clinical|nursing|pharmacy|pubmed|embase|cinahl|cochrane|uptodate|systematic review|cancer|diabetes|treatment|diagnosis|surgery|biomedical)\b/i.test(question),
+      ai_tool_query: question,
+      primo_boolean_query: bool,
+      primo_search_terms: dbQuery,
+      primo_search_url: buildPrimoURL(bool, 'Everything', 'MyInst_and_CI', []),
+      primo_ai_url: `${PRIMO_AI_URL}${encodeURIComponent(question)}`
+    };
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
 // SEARCH — execute against HF Space /search endpoint
 // ═══════════════════════════════════════════════════════════════
 async function executeSearch(query, opts = {}) {
-  const bool = makeBoolean(query);
-  const dbQuery = bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim().substring(0, 500);
   const pr = opts.pr || false, oa = opts.oa || false;
   const yf = opts.yf || '', yt = opts.yt || '';
-
   const sid = 'S' + Date.now();
   window._primoResults[sid] = [];
 
-  // Build PRIMO URLs for manual use
+  const plan = await prepareSearchPlan(query, { pr, oa, yf, yt });
+  const bool = plan.primo_boolean_query || makeBoolean(query);
+  const dbQuery = (plan.primo_search_terms || query).substring(0, 500);
+
   const facets = [...(pr?['tlevel,include,peer_reviewed']:[]),...(oa?['tlevel,include,open_access']:[]),...(yf||yt?[`searchcreationdate,include,${yf||'0001'}|,|${yt||'9999'}`]:[])];
-  const urlAll = buildPrimoURL(bool, 'Everything', 'MyInst_and_CI', facets);
+  const urlAll = plan.primo_search_url || buildPrimoURL(bool, 'Everything', 'MyInst_and_CI', facets);
   const urlArt = buildPrimoURL(bool, 'CentralIndex', 'CentralIndex', [...facets,'rtype,include,articles']);
   const urlBk  = buildPrimoURL(bool, 'Everything', 'MyInst_and_CI', [...facets,'rtype,include,books']);
 
-  // Show search card immediately
   const cm = document.getElementById('chatMsgs');
   const loadEl = document.createElement('div'); loadEl.className = 'msg bot'; loadEl.style.maxWidth = '96%';
   loadEl.innerHTML = `<div class="av">🔍</div><div class="scard">
@@ -693,7 +723,7 @@ async function executeSearch(query, opts = {}) {
       <a class="slink art" href="${urlArt}" target="_blank">📄 Articles</a>
       <a class="slink bk"  href="${urlBk}"  target="_blank">📗 Books</a>
     </div>
-    ${buildAIToolsPanel(query, urlAll)}
+    ${buildAIToolsPanel(plan.ai_tool_query || query, urlAll, plan.primo_ai_url || '')}
     <div style="margin-top:10px;font-size:.8rem;color:var(--mu);display:flex;align-items:center;gap:6px">
       <div class="typing"><span></span><span></span><span></span></div>
       <span>Fetching PRIMO results…</span>
@@ -753,21 +783,21 @@ async function doSearch() {
   const resultsDiv = document.getElementById('sResults');
 
   btn.disabled = true;
-  statusDiv.innerHTML = '<span style="color:#d97706">✏️ Building Boolean query…</span>';
+  statusDiv.innerHTML = '<span style="color:#d97706">✏️ Building search strategy…</span>';
   resultsDiv.innerHTML = '';
 
-  const bool = makeBoolean(query);
-  const dbQuery = bool.replace(/[()"]/g,'').replace(/\b(AND|OR)\b/g,' ').replace(/\s+/g,' ').trim().substring(0, 500);
   const sid = 'ST' + Date.now();
   window._primoResults[sid] = [];
 
-  const facets = [...(pr?['tlevel,include,peer_reviewed']:[]),...(oa?['tlevel,include,open_access']:[]),...(yf||yt?[`searchcreationdate,include,${yf||'0001'}|,|${yt||'9999'}`]:[])];
-  const urlAll = buildPrimoURL(bool, 'Everything', 'MyInst_and_CI', facets);
-  const urlArt = buildPrimoURL(bool, 'CentralIndex', 'CentralIndex', [...facets,'rtype,include,articles']);
-  const urlBk  = buildPrimoURL(bool, 'Everything', 'MyInst_and_CI', [...facets,'rtype,include,books']);
-  const isMedical = /\b(medicine|medical|health|clinical|nursing|pharmacy|pubmed|embase|cinahl|cochrane|uptodate|systematic review|cancer|diabetes|treatment|diagnosis|surgery|biomedical)\b/i.test(query);
-
   try {
+    const plan = await prepareSearchPlan(query, { pr, oa, yf, yt });
+    const bool = plan.primo_boolean_query || makeBoolean(query);
+    const dbQuery = (plan.primo_search_terms || query).substring(0, 500);
+    const facets = [...(pr?['tlevel,include,peer_reviewed']:[]),...(oa?['tlevel,include,open_access']:[]),...(yf||yt?[`searchcreationdate,include,${yf||'0001'}|,|${yt||'9999'}`]:[])];
+    const urlAll = plan.primo_search_url || buildPrimoURL(bool, 'Everything', 'MyInst_and_CI', facets);
+    const urlArt = buildPrimoURL(bool, 'CentralIndex', 'CentralIndex', [...facets,'rtype,include,articles']);
+    const urlBk  = buildPrimoURL(bool, 'Everything', 'MyInst_and_CI', [...facets,'rtype,include,books']);
+
     statusDiv.innerHTML = '<span style="color:#16a34a">🔍 Searching PRIMO…</span>';
 
     const res = await fetchWithTimeout(API_URL + '/search', {
@@ -781,7 +811,6 @@ async function doSearch() {
     window._primoResults[sid] = data.results || [];
 
     let html = '';
-    // Search strategy card
     html += `<div class="scard">
       <div class="scard-title">🔍 Search Strategy</div>
       <div class="bool-str">${bool}</div>
@@ -792,15 +821,12 @@ async function doSearch() {
       </div>
     </div>`;
 
-    // AI tools
-    html += buildAIToolsPanel(query, urlAll);
+    html += buildAIToolsPanel(plan.ai_tool_query || query, urlAll, plan.primo_ai_url || '');
 
-    // PubMed for medical topics
-    if (isMedical) {
+    if (plan.is_medical) {
       html += `<div style="margin:8px 0"><a href="https://pubmed.ncbi.nlm.nih.gov/?term=${encodeURIComponent(dbQuery)}" target="_blank" style="display:block;padding:8px 14px;background:#d1fae5;color:#065f46;border-radius:8px;text-decoration:none;font-weight:700;font-size:.8rem;text-align:center">🏥 Also search PubMed (medical literature) →</a></div>`;
     }
 
-    // Results
     if (data.results && data.results.length > 0) {
       html += `<div style="font-size:.84rem;font-weight:700;color:var(--ku-blue);margin:12px 0 6px">📄 ${(data.total||0).toLocaleString()} results — showing top ${data.results.length}:</div>`;
       html += data.results.map((r, i) => renderResultCard(r, i, sid)).join('');
@@ -825,20 +851,24 @@ async function doSearch() {
 // ═══════════════════════════════════════════════════════════════
 // AI TOOLS PANEL
 // ═══════════════════════════════════════════════════════════════
-function buildAIToolsPanel(naturalQuery, primoDiscoveryUrl = '') {
+function buildAIToolsPanel(naturalQuery, primoDiscoveryUrl = '', primoAiUrl = '') {
   const cleanQuery = (naturalQuery || '').trim();
   const nq = encodeURIComponent(cleanQuery);
+  const ebscoUrl = `https://khalifa.idm.oclc.org/login?url=http://search.ebscohost.com/login.aspx?authtype=ip,uid&profile=eds&direct=true&bquery=${nq}`;
   const fallbackDiscovery = primoDiscoveryUrl || `${PRIMO_BASE}?query=any,contains,${encodeURIComponent(cleanQuery)}&lang=en&mode=advanced&offset=0`;
+  const fallbackPrimoAi = primoAiUrl || `${PRIMO_AI_URL}${nq}`;
   return `<div class="ai-panel">
     <div class="ai-panel-title">✨ Continue with AI Research Tools</div>
-    <div class="ai-row-label">AI Sources</div>
+    <div class="ai-row-label">KU Subscribed</div>
     <div class="ai-tools-strip">
       <a class="ai-tool-chip leapspace" href="https://www.sciencedirect.com/leapspace?query=${nq}" target="_blank">🔬 LeapSpace</a>
       <a class="ai-tool-chip scopus" href="https://www-scopus-com.khalifa.idm.oclc.org/pages/ai?query=${nq}" target="_blank">🔭 Scopus AI</a>
-      <a class="ai-tool-chip consensus" href="https://consensus.app/results/?q=${nq}" target="_blank">🧬 Consensus</a>
+      <a class="ai-tool-chip ebscoai" href="${ebscoUrl}" target="_blank">📰 EBSCO AI</a>
+      <a class="ai-tool-chip primoai" href="${fallbackPrimoAi}" target="_blank">⭐ PRIMO AI Assistant</a>
     </div>
-    <div class="ai-row-label">KU Access</div>
+    <div class="ai-row-label">More Options</div>
     <div class="ai-tools-strip">
+      <a class="ai-tool-chip consensus" href="https://consensus.app/results/?q=${nq}" target="_blank">🧬 Consensus</a>
       <a class="ai-tool-chip primoai" href="${fallbackDiscovery}" target="_blank">📚 PRIMO Library Discovery</a>
     </div>
   </div>`;
