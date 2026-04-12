@@ -616,18 +616,32 @@ async function runSearch(query) {
 // SEARCH — Boolean builder (local, no API cost)
 // ═══════════════════════════════════════════════════════════════
 function makeBoolean(text) {
-  const stop = /^(of|on|in|the|a|an|and|or|for|to|with|by|from|at|is|are|was|were|be|been|have|has|had|do|does|did|will|would|could|should|may|its|this|that|these|those|about|impact|role|effect|use|study|analysis|review|what|how|why|when|where|which)$/i;
-  const words = text.split(/\s+/);
-  const concepts = []; let phrase = [];
+  // Improved fallback boolean builder — used only when /agent is unavailable.
+  // Keeps runs of content words as quoted phrases; splits only on stop words.
+  const stop = /^(of|on|in|the|a|an|and|or|for|to|with|by|from|at|is|are|was|were|be|been|have|has|had|do|does|did|will|would|could|should|may|its|this|that|these|those|about|impact|role|effect|use|study|analysis|review|what|how|why|when|where|which|between|within|across|among|using|based|related|towards|toward|during|after|before|over|under)$/i;
+  const words = text.trim().split(/\s+/);
+
+  // Build concept phrases: runs of non-stop words grouped together
+  const concepts = [];
+  let phrase = [];
   for (const w of words) {
-    const c = w.replace(/['"]/g, '');
-    if (!stop.test(c) && c.length > 2) { phrase.push(c); }
-    else { if (phrase.length) { concepts.push(phrase.join(' ')); phrase = []; } }
+    const c = w.replace(/['".,;:?!]/g, '');
+    if (c.length < 2) continue;
+    if (!stop.test(c)) {
+      phrase.push(c);
+    } else {
+      if (phrase.length) { concepts.push(phrase.join(' ')); phrase = []; }
+    }
   }
   if (phrase.length) concepts.push(phrase.join(' '));
-  if (concepts.length >= 2) return concepts.map(c => `"${c}"`).join(' AND ');
+
+  // If only one concept (e.g. "global warming" → one phrase), return it quoted
+  if (concepts.length === 0) return `"${text.trim()}"`;
   if (concepts.length === 1) return `"${concepts[0]}"`;
-  return `"${text}"`;
+
+  // Quote multi-word phrases, leave single words bare, join with AND
+  const parts = concepts.slice(0, 4).map(c => c.includes(' ') ? `"${c}"` : c);
+  return parts.join(' AND ');
 }
 
 function sanitizeBoolean(b) {
