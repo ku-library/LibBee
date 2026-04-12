@@ -575,8 +575,8 @@ async function sendChat(text, meta = {}) {
     }
 
     if (['search_academic', 'search_medical'].includes(data.intent)) {
-      const aiQuery = data.ai_tool_query || data.natural_query || question;
-      html += buildAIToolsPanel(aiQuery, { primoDiscoveryUrl: data.primo_search_url || '', primoAiUrl: data.primo_ai_url || '', pubmedUrl: data.pubmed_search_url || '', isMedical: data.intent === 'search_medical' });
+      // AI tools panel is now embedded in the answer HTML by the backend.
+      // Do not call buildAIToolsPanel here to avoid duplicating it.
     }
 
     if (data.contact_html) {
