@@ -744,7 +744,6 @@ async function executeSearch(query, opts = {}) {
       <a class="slink art" href="${urlArt}" target="_blank">📄 Articles</a>
       <a class="slink bk"  href="${urlBk}"  target="_blank">📗 Books</a>
     </div>
-    ${buildAIToolsPanel(plan.ai_tool_query || query, { primoDiscoveryUrl: urlAll, primoAiUrl: plan.primo_ai_url || '', pubmedUrl: plan.pubmed_url || '', isMedical: !!plan.is_medical })}
     <div style="margin-top:10px;font-size:.8rem;color:var(--mu);display:flex;align-items:center;gap:6px">
       <div class="typing"><span></span><span></span><span></span></div>
       <span>Fetching PRIMO results…</span>
@@ -860,8 +859,6 @@ async function doSearch() {
       </div>
     </div>`;
 
-    html += buildAIToolsPanel(plan.ai_tool_query || query, { primoDiscoveryUrl: urlAll, primoAiUrl: plan.primo_ai_url || '', pubmedUrl: plan.pubmed_url || '', isMedical: !!plan.is_medical });
-
     if (data.results && data.results.length > 0) {
       html += `<div style="font-size:.84rem;font-weight:700;color:var(--ku-blue);margin:12px 0 6px">📄 ${(data.total||0).toLocaleString()} results — showing top ${data.results.length}:</div>`;
       html += data.results.map((r, i) => renderResultCard(r, i, sid)).join('');
@@ -871,6 +868,9 @@ async function doSearch() {
     } else {
       html += '<div class="error-banner">No results found. Try broadening your search terms.</div>';
     }
+
+    // AI tools always at the end
+    html += buildAIToolsPanel(plan.ai_tool_query || query, { primoDiscoveryUrl: urlAll, primoAiUrl: plan.primo_ai_url || '', pubmedUrl: plan.pubmed_url || '', isMedical: !!plan.is_medical });
 
     statusDiv.innerHTML = '';
     resultsDiv.innerHTML = html;
