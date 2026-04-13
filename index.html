@@ -734,10 +734,17 @@ async function executeSearch(query, opts = {}) {
   const urlArt = plan.primo_articles_url || buildPrimoURL(bool, 'CentralIndex', 'CentralIndex', ['rtype,include,articles']);
   const urlBk  = plan.primo_books_url || buildPrimoURL(bool, 'Everything', 'MyInst_and_CI', ['rtype,include,books']);
 
+  // Show correction notice if query was spell-corrected
+  const corrected = plan.topic && plan.topic.toLowerCase() !== query.toLowerCase() ? plan.topic : null;
+  const correctionHtml = corrected
+    ? `<div style="font-size:.78rem;color:#d97706;margin-bottom:6px">✏️ Corrected to: <em>${corrected}</em></div>`
+    : '';
+
   const cm = document.getElementById('chatMsgs');
   const loadEl = document.createElement('div'); loadEl.className = 'msg bot'; loadEl.style.maxWidth = '96%';
   loadEl.innerHTML = `<div class="av">🔍</div><div class="scard">
     <div class="scard-title">🔍 Searching PRIMO Library Discovery…</div>
+    ${correctionHtml}
     <div class="bool-str">${bool}</div>
     <div class="slinks">
       <a class="slink all" href="${urlAll}" target="_blank">📚 All Resources</a>
@@ -828,6 +835,13 @@ async function doSearch() {
 
     statusDiv.innerHTML = '<span style="color:#16a34a">🔍 Searching PRIMO Library Discovery…</span>';
 
+    // If query was corrected, update the search input so user sees it
+    const corrected = plan.topic && plan.topic.toLowerCase() !== query.toLowerCase() ? plan.topic : null;
+    if (corrected) {
+      document.getElementById('sIn').value = corrected;
+      statusDiv.innerHTML = `<span style="color:#d97706">✏️ Corrected to "<em>${corrected}</em>" — searching…</span>`;
+    }
+
     const res = await fetchWithTimeout(API_URL + '/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -849,8 +863,10 @@ async function doSearch() {
     window._primoResults[sid] = data.results || [];
 
     let html = '';
+    const corrected = plan.topic && plan.topic.toLowerCase() !== query.toLowerCase() ? plan.topic : null;
     html += `<div class="scard">
       <div class="scard-title">🔍 Search Strategy</div>
+      ${corrected ? `<div style="font-size:.78rem;color:#d97706;margin-bottom:6px">✏️ Corrected to: <em>${corrected}</em></div>` : ''}
       <div class="bool-str">${bool}</div>
       <div class="slinks">
         <a class="slink all" href="${urlAll}" target="_blank">📚 All Resources</a>
@@ -899,7 +915,7 @@ function buildAIToolsPanel(naturalQuery, options = {}) {
     <div class="ai-tools-strip">
       <a class="ai-tool-chip leapspace" href="https://www.sciencedirect.com/leapspace?query=${nq}" target="_blank">🔬 LeapSpace</a>
       <a class="ai-tool-chip scopus" href="https://www-scopus-com.khalifa.idm.oclc.org/pages/ai?query=${nq}" target="_blank">🔭 Scopus AI</a>
-      <a class="ai-tool-chip ebscoai" href="https://research-ebsco-com.khalifa.idm.oclc.org/c/ntdlkp/search?q=${nq}" target="_blank">📰 EBSCO AI</a>
+      <a class="ai-tool-chip ebscoai" href="https://research-ebsco-com.khalifa.idm.oclc.org/c/yst6t2/search/results?q=${nq}&autocorrect=y&expanders=concept&limiters=None&searchMode=enhanced&searchSegment=all-results" target="_blank">📰 EBSCO AI</a>
       <a class="ai-tool-chip primoai" href="${primoAiUrl}" target="_blank">⭐ PRIMO AI Assistant</a>
     </div>
     <div class="ai-row-label">🆓 Freemium AI tools</div>
