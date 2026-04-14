@@ -119,7 +119,10 @@ header{background:var(--ku-blue);color:#fff;padding:10px 16px;display:flex;align
 .rcard-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
 .rcard-btn{padding:4px 10px;border-radius:8px;font-size:.72rem;border:1px solid var(--border);background:#fff;color:var(--ku-blue);cursor:pointer;font-weight:600;transition:all .2s}
 .rcard-btn:hover{background:var(--ku-blue);color:#fff}
-.cite-box{background:var(--bg);border-radius:8px;padding:8px 10px;font-size:.76rem;font-family:monospace;line-height:1.5;margin-top:6px;word-break:break-word;border-left:3px solid var(--ku-gold)}
+.rcard-desc{font-size:.78rem;color:#374151;line-height:1.5;margin:5px 0 4px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.rcard-btn.primary{background:var(--ku-blue);color:#fff;border-color:var(--ku-blue)}
+.rcard-btn.primary:hover{background:#004488}
+.results-section-hdr{font-size:.82rem;font-weight:800;color:var(--ku-blue);margin:14px 0 6px;padding-bottom:4px;border-bottom:2px solid var(--ku-gold)}
 
 /* ── Guides / Services / Databases ── */
 .barea{padding:12px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px}
@@ -544,6 +547,9 @@ async function sendChat(text, meta = {}) {
   trimHistory();
 
   try {
+    // Summary/snapshot requests chain two LLM calls — give them more time
+    const isSummary = /\b(summar|overview|literature review|recent advances|research snapshot|deep dive|deep research)\b/i.test(question);
+    const agentTimeout = isSummary ? 90000 : FETCH_TIMEOUT;
     const res = await fetchWithTimeout(API_URL + '/agent', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -553,7 +559,7 @@ async function sendChat(text, meta = {}) {
         history: chatHistory.slice(-10),
         client_state: getClientStatePayload(meta)
       })
-    });
+    }, agentTimeout);
 
     hideTyping();
     if (!res.ok) throw new Error('Server error: ' + res.status);
@@ -571,7 +577,7 @@ async function sendChat(text, meta = {}) {
       const sid = 'AG' + Date.now();
       window._primoResults[sid] = data.search_results;
       html += '<div style="margin-top:10px;font-size:.82rem;font-weight:700;color:var(--ku-blue)">📄 Results found:</div>';
-      html += data.search_results.slice(0, 6).map((r, i) => renderResultCard(r, i, sid)).join('');
+      html += renderResultsWithSections(data.search_results.slice(0, 12), sid);
     }
 
     if (data.sources && data.sources.length > 0) {
@@ -796,7 +802,7 @@ async function executeSearch(query, opts = {}) {
     let html = '';
     if (data.results && data.results.length > 0) {
       html += `<div style="font-size:.82rem;font-weight:700;color:var(--ku-blue);margin:10px 0 6px">📄 ${(data.total||0).toLocaleString()} results — showing top ${data.results.length}:</div>`;
-      html += data.results.map((r, i) => renderResultCard(r, i, sid)).join('');
+      html += renderResultsWithSections(data.results, sid);
       html += `<div style="text-align:center;margin-top:10px"><a href="${urlAll}" target="_blank" style="display:inline-block;padding:8px 18px;background:var(--ku-blue);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:.82rem">View more in PRIMO Library Discovery →</a></div>`;
     } else if (data.error) {
       html = `<div class="error-banner">⚠️ ${data.error}</div>`;
@@ -884,7 +890,7 @@ async function doSearch() {
 
     if (data.results && data.results.length > 0) {
       html += `<div style="font-size:.84rem;font-weight:700;color:var(--ku-blue);margin:12px 0 6px">📄 ${(data.total||0).toLocaleString()} results — showing top ${data.results.length}:</div>`;
-      html += data.results.map((r, i) => renderResultCard(r, i, sid)).join('');
+      html += renderResultsWithSections(data.results, sid);
       html += `<div style="text-align:center;margin-top:12px"><a href="${urlAll}" target="_blank" style="display:inline-block;padding:10px 20px;background:var(--ku-blue);color:#fff;text-decoration:none;border-radius:8px;font-weight:600">View more in PRIMO Library Discovery →</a></div>`;
     } else if (data.error) {
       html += `<div class="error-banner">⚠️ ${data.error}</div>`;
@@ -945,23 +951,47 @@ function buildAIToolsPanel(naturalQuery, options = {}) {
 // ═══════════════════════════════════════════════════════════════
 // RESULT CARD + CITATION GENERATOR
 // ═══════════════════════════════════════════════════════════════
-function renderResultCard(r, idx, sid) {
+function renderResultCard(r, idx, sid, num) {
   const safeTitle = (r.title || 'Untitled').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const link = r.primo_url || r.link || (r.doi ? 'https://doi.org/' + r.doi : '') || (r.pmid ? 'https://pubmed.ncbi.nlm.nih.gov/' + r.pmid + '/' : '#');
-  const srcColors = { 'PRIMO': '#fef3c7|#92400e', 'PubMed': '#d1fae5|#065f46', 'Semantic Scholar': '#e0e7ff|#3730a3' };
+  const isOA = r._source === 'OpenAlex';
+  const srcColors = {
+    'PRIMO': '#fef3c7|#92400e',
+    'PubMed': '#d1fae5|#065f46',
+    'OpenAlex': '#f0f9ff|#0c4a6e',
+    'Semantic Scholar': '#e0e7ff|#3730a3'
+  };
   const [bg, fg] = (srcColors[r._source] || 'var(--bg)|var(--mu)').split('|');
   const srcTag = r._source ? `<span class="rcard-tag" style="background:${bg};color:${fg}">${r._source}</span>` : '';
+  const oaTag = (r.openaccess || isOA) ? '<span class="rcard-tag oa">Open Access</span>' : '';
   const citeId = `cite_${sid}_${idx}`;
+  const numLabel = num != null ? `<span style="font-size:.72rem;font-weight:800;color:var(--mu);margin-right:6px">${num}.</span>` : '';
+
+  // Description: use abstract/description for OpenAlex, skip for PRIMO
+  const desc = (r.description || r.abstract || '').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const descHtml = desc
+    ? `<div class="rcard-desc">${desc.length > 220 ? desc.slice(0,220) + '…' : desc}</div>`
+    : '';
+
+  // Authors line
+  const authorsLine = r.creator || r.authors || '';
+  const dateLine = r.date || r.year || '';
+  const metaLine = [authorsLine, dateLine, r.type || (isOA ? 'Article' : '')].filter(Boolean).join(' · ');
+
+  // "Read more" goes to PRIMO title search for OpenAlex, direct link for PRIMO
+  const readMoreLabel = isOA ? 'Find in PRIMO →' : 'View →';
+
   return `<div class="rcard">
-    <div class="rcard-title"><a href="${link}" target="_blank">${safeTitle}</a></div>
-    <div class="rcard-meta">${r.creator || 'Unknown'} · ${r.date || ''} · ${r.type || 'Article'}</div>
-    ${r.source ? `<div class="rcard-meta">${r.source}</div>` : ''}
-    <div class="rcard-tags">${srcTag}${r.openaccess ? '<span class="rcard-tag oa">Open Access</span>' : ''}</div>
+    <div class="rcard-title">${numLabel}<a href="${link}" target="_blank">${safeTitle}</a></div>
+    ${metaLine ? `<div class="rcard-meta">${metaLine.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>` : ''}
+    ${r.source && !isOA ? `<div class="rcard-meta">${r.source}</div>` : ''}
+    ${descHtml}
+    <div class="rcard-tags">${srcTag}${oaTag}</div>
     <div class="rcard-actions">
-      <button class="rcard-btn" onclick="window.open('${link}','_blank')">View →</button>
-      <button class="rcard-btn" onclick="showCite('${sid}',${idx},'apa')">APA</button>
+      <button class="rcard-btn primary" onclick="window.open('${link}','_blank')">${readMoreLabel}</button>
+      ${!isOA ? `<button class="rcard-btn" onclick="showCite('${sid}',${idx},'apa')">APA</button>
       <button class="rcard-btn" onclick="showCite('${sid}',${idx},'ieee')">IEEE</button>
-      <button class="rcard-btn" onclick="showCite('${sid}',${idx},'harvard')">Harvard</button>
+      <button class="rcard-btn" onclick="showCite('${sid}',${idx},'harvard')">Harvard</button>` : ''}
     </div>
     <div id="${citeId}"></div>
   </div>`;
@@ -972,13 +1002,28 @@ function showCite(sid, idx, style) {
   if (!r) return;
   const el = document.getElementById(`cite_${sid}_${idx}`);
   if (!el) return;
-  const auth = r.creator || 'Unknown', yr = r.date || 'n.d.', title = r.title || 'Untitled';
+  const auth = r.creator || r.authors || 'Unknown', yr = r.date || r.year || 'n.d.', title = r.title || 'Untitled';
   const src = r.source || '', doi = r.doi ? 'https://doi.org/' + r.doi : '';
   let c = '';
   if (style === 'apa')     c = `${auth} (${yr}). ${title}. <em>${src}</em>.${doi ? ' ' + doi : ''}`;
   if (style === 'ieee')    c = `${auth}, "${title}," <em>${src}</em>, ${yr}.${doi ? ' doi: ' + r.doi : ''}`;
   if (style === 'harvard') c = `${auth} (${yr}) '${title}', <em>${src}</em>.${doi ? ' Available at: ' + doi : ''}`;
   el.innerHTML = `<div class="cite-box">${c}</div>`;
+}
+
+function renderResultsWithSections(results, sid) {
+  const primo = results.filter(r => r._source !== 'OpenAlex');
+  const oa    = results.filter(r => r._source === 'OpenAlex');
+  let html = '';
+  if (primo.length > 0) {
+    html += `<div class="results-section-hdr">📚 KU Library Results (PRIMO)</div>`;
+    html += primo.map((r, i) => renderResultCard(r, i, sid, i + 1)).join('');
+  }
+  if (oa.length > 0) {
+    html += `<div class="results-section-hdr">🌍 Open Access Articles (OpenAlex)</div>`;
+    html += oa.map((r, i) => renderResultCard(r, primo.length + i, sid, i + 1)).join('');
+  }
+  return html;
 }
 
 // ═══════════════════════════════════════════════════════════════
