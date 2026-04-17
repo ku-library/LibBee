@@ -354,51 +354,49 @@ var isSending = false;
 function promptFindArticles() {
   var input = document.getElementById('chatIn');
   if (!input) return;
+  showChatUI();
   input.value = 'Find articles on ';
   input.focus();
   var len = input.value.length;
   input.setSelectionRange(len, len);
-  // ── Welcome screen helpers ──────────────────────────────────────────────────
-  function wlcSubmit() {
-    var val = document.getElementById('wlcIn').value.trim();
-    if (!val) return;
-    showChatUI();
-    sendChat(val);
-  }
+}
 
-  function wlcSend(text) {
-    showChatUI();
-    sendChat(text);
-  }
+// ── Welcome screen helpers ──────────────────────────────────────────────────
+function wlcSubmit() {
+  var val = document.getElementById('wlcIn').value.trim();
+  if (!val) return;
+  showChatUI();
+  sendChat(val);
+}
 
-  function showChatUI() {
-    var ws = document.getElementById('welcome-screen');
-    var msgs = document.getElementById('chatMsgs');
-    var bar = document.getElementById('chat-bottom-bar');
-    if (ws)   ws.style.display   = 'none';
-    if (msgs) msgs.style.display = 'flex';
-    if (bar)  bar.style.display  = 'block';
-  }
+function wlcSend(text) {
+  showChatUI();
+  sendChat(text);
+}
 
-  function showWelcomeScreen() {
-    var ws = document.getElementById('welcome-screen');
-    var msgs = document.getElementById('chatMsgs');
-    var bar = document.getElementById('chat-bottom-bar');
-    if (ws)   ws.style.display   = 'flex';
-    if (msgs) { msgs.style.display = 'none'; msgs.innerHTML = ''; }
-    if (bar)  bar.style.display  = 'none';
-    // Reset input
-    var wi = document.getElementById('wlcIn');
-    if (wi) wi.value = '';
-    conversationHistory = [];
-    lastSearchQuery = '';
-    currentSessionId = null;
-    isSending = false;
-    document.getElementById('sendBtn').disabled = false;
-    document.getElementById('chatIn').disabled = false;
-    document.getElementById('chatIn').value = '';
-  }
-  if (chips) chips.style.display = 'none';
+function showChatUI() {
+  var ws = document.getElementById('welcome-screen');
+  var msgs = document.getElementById('chatMsgs');
+  var bar = document.getElementById('chat-bottom-bar');
+  if (ws)   ws.style.display   = 'none';
+  if (msgs) msgs.style.display = 'flex';
+  if (bar)  bar.style.display  = 'block';
+}
+
+function showWelcomeScreen() {
+  var ws = document.getElementById('welcome-screen');
+  var msgs = document.getElementById('chatMsgs');
+  var bar = document.getElementById('chat-bottom-bar');
+  if (ws)   ws.style.display   = 'flex';
+  if (msgs) { msgs.style.display = 'none'; msgs.innerHTML = ''; }
+  if (bar)  bar.style.display  = 'none';
+  var wi = document.getElementById('wlcIn');
+  if (wi) wi.value = '';
+  chatHistory = [];
+  isSending = false;
+  document.getElementById('sendBtn').disabled = false;
+  document.getElementById('chatIn').disabled = false;
+  document.getElementById('chatIn').value = '';
 }
 window._primoResults = {};
 
